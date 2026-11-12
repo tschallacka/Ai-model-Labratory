@@ -7,6 +7,7 @@ so a phone only downloads the sample it opens. Host petri/static/ as-is on any w
 complete document); for a claude.ai artifact publish artifact.html with traces/*.b64.txt as supporting files.
 """
 import base64
+import hashlib
 import json
 import os
 import sys
@@ -44,6 +45,26 @@ def main():
     open(os.path.join(OUT, 'index.html'), 'w').write(SKELETON.replace('%BODY%', body))
     open(os.path.join(OUT, 'artifact.html'), 'w').write(body)
     print('wrote', os.path.join(OUT, 'index.html'), 'and artifact.html', f'(blocks: {t.blocks_meta["kind"]})')
+    write_version()
+
+
+def write_version():
+    """version.json: a fingerprint of everything the site serves, to poll after a deploy.
+
+    'version' is a hash over every served file's own hash, so it changes exactly when content changes and a
+    rebuild with no changes gives the same file (nothing new to commit). Deployed = the live version.json
+    shows the same 'version' as the local one.
+    """
+    files = {}
+    for root, _, names in os.walk(OUT):
+        for n in names:
+            rel = os.path.relpath(os.path.join(root, n), OUT)
+            if rel != 'version.json':
+                files[rel] = hashlib.sha256(open(os.path.join(root, n), 'rb').read()).hexdigest()[:12]
+    files = dict(sorted(files.items()))
+    version = hashlib.sha256(''.join(f'{k}:{v}\n' for k, v in files.items()).encode()).hexdigest()[:12]
+    json.dump({'version': version, 'files': files}, open(os.path.join(OUT, 'version.json'), 'w'), indent=1)
+    print('version', version)
 
 
 if __name__ == '__main__':

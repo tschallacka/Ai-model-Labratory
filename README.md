@@ -28,6 +28,10 @@ server (`index.html` is a complete document). `artifact.html` is the same page w
 skeleton, for a claude.ai artifact, whose host adds it. Traces ship as base64 text because that host
 serves no binary file types.
 
+`petri/static/version.json` fingerprints the build: `version` is a hash over every served file, so it
+changes exactly when the content does. After a deploy, the live `version.json` matching the local one
+means the new build is being served.
+
 ## Files
 
 - `petri/viewer.html`: the page (three.js), used by both the live server and the static build.
