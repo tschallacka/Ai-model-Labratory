@@ -42,7 +42,9 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 section#panel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
   padding-top: 8px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  display: grid; gap: 8px; backdrop-filter: blur(6px); }
+  display: grid; gap: 8px; backdrop-filter: blur(6px);
+  /* Expanded on a phone it can be taller than the screen; the page itself never scrolls, so the panel does. */
+  max-height: 75vh; max-height: 75dvh; overflow-y: auto; overscroll-behavior: contain; }
 #tokens { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
 .tok { flex: none; font: 12px var(--mono); padding: 3px 6px; border-radius: 4px; background: #1a212c; border: 1px solid var(--line); color: var(--fg); }
 .tok.after { opacity: 0.35; }
@@ -364,7 +366,7 @@ const STEPS = [
     cam: () => [0, 42, 0, 26] },
   { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 7, gap: 1800,
     plain: 'How one number of a head is made. The stream is shown as bars: longer means bigger. First it is evened out: every bar is scaled by the same amount, like a volume knob, so the row has a standard loudness, and each position then gets its own small fixed boost or damping. Then each of the 576 numbers is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
-    tech: 'RMSNorm x / √(mean(x²) + ε) × g, with g the learned per-dimension gain. One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). Shown: the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
+    tech: 'RMSNorm x / √(mean(x²) + ε) × g, with g the learned per-dimension gain. One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). The pair buttons pick pair p = 0, 4 or 8 (57°, 14°, 3.2° per token) or the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
     cam: ph => [[0, 40, 0, 30], [0, 40, 0, 30], [0, 44, -11, 50], [0, 44, -22, 74], [0, 44, -29, 78], [8, 40, SY, 30], [BX / 2, 84, -18, 90]][ph] },
   { key: 'qkv', short: 'q k v', t: 'All the heads', phases: 1,
     plain: 'That same recipe runs for every number, each with its own weights. The result: 9 "question" blocks (what is this token looking for?), plus 3 "label" blocks and 3 "content" blocks that every token offers to the others. Each label and content block is shared by the 3 question blocks in its row.',
