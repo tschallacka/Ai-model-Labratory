@@ -364,7 +364,7 @@ const STEPS = [
     tech: 'Residual stream entering the layer. Colour is relative to the 98th percentile of |value| in this vector; a few outlier dimensions saturate.',
     cam: () => [0, 42, 0, 26] },
   { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 7, gap: 1800,
-    plain: 'How one number of a head is made. The stream is shown as bars: longer means bigger. First it is evened out: every bar is scaled by the same amount, like a volume knob, so the row has a standard loudness, and each position then gets its own small fixed boost or damping. Then each of the 576 numbers is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
+    plain: 'How one number of a head is made. The stream is shown as bars from a flat base: orange (positive) bars stick out toward you, blue (negative) bars go back into the screen, and longer means bigger. First it is evened out: every bar is scaled by the same amount, like a volume knob, so the row has a standard loudness, and each position then gets its own small fixed boost or damping. Then each of the 576 numbers is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
     tech: 'RMSNorm x / √(mean(x²) + ε) × g, with g the learned per-dimension gain. One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). The pair buttons pick pair p = 0, 4 or 8 (57°, 14°, 3.2° per token) or the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
     cam: ph => [[0, 40, 0, 30], [0, 40, 0, 30], [0, 44, -11, 50], [0, 44, -22, 74], [0, 44, -29, 78], [8, 40, SY, 30], [BX / 2, 84, -18, 90]][ph] },
   { key: 'qkv', short: 'q k v', t: 'All the heads', phases: 1,
@@ -403,7 +403,7 @@ const LABELS = [
   { t: 'embedding table · one row per token · 49,152 rows × 576', p: () => [EX, 21.6, 0], keys: ['embed'] },
   { t: '', p: () => [EX + 18, slabY(tokSlab()) + 0.6, 0], keys: ['embed'], hot: true, text: () => `“${showTok(tr.h.tokens[tok])}” = ID ${tr.h.ids[tok]}` },
   { t: 'the stream · 576 numbers', p: () => [0, 10.5, 0], keys: ['embed', 'in', 'qkv', 'attend', 'headsout', 'concat'], minPh: { embed: 1 } },
-  { t: 'the stream as it arrives · bar length = size', p: () => [0, 10.5, 0], keys: ['head'], maxPh: { head: 0 } },
+  { t: 'the stream as it arrives · orange sticks out, blue goes back', p: () => [0, 10.5, 0], keys: ['head'], maxPh: { head: 0 } },
   { t: '', p: () => [0, 10.5, 0], keys: ['head'], minPh: { head: 1 }, text: () => (W && tr ? `evened out: every bar × ${headDemo(layer, tok, demoHead).factor.toFixed(2)}, then its own boost` : 'evened out') },
   { t: 'one row of 576 weights', p: () => [0, WY + 10.5, 0], keys: ['head'], minPh: { head: 2 } },
   { t: 'each number × its weight', p: () => [0, PY + 10.5, 0], keys: ['head'], minPh: { head: 3 }, maxPh: { head: 3 } },
@@ -488,7 +488,8 @@ function buildState(s, ph) {
     if (key === 'embed' && ph === 0) G.R.set(i, [EX + (i % 32) - 15.5, slabY(tokSlab()), 0.9], 0.3, valColor(rv[i]));
     else if (demo) {
       const d = 0.25 + Math.min(10, (Math.abs(rraw[i]) / barS) * 1.6), [px, py] = residPos(i, 0);
-      G.R.set(i, [px, py, d * 0.4], [1, 1, d], valColor(rraw[i] / barS));
+      // positive bars stick out toward the viewer, negative ones go back into the screen, from one flat base
+      G.R.set(i, [px, py, (rraw[i] < 0 ? -1 : 1) * d * 0.4], [1, 1, d], valColor(rraw[i] / barS));
     } else G.R.set(i, residPos(i, rx, rz), 1, valColor(rv[i]));
   }
   G.R.vals.set(rraw);
