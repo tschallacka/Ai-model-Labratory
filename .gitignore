@@ -1,0 +1,17 @@
+# Allow-list: this repository holds only the petri viewer and the server behind it.
+# Everything else in this folder (datasets, chats, measurements) stays local.
+/*
+!/.gitignore
+!/README.md
+!/model.py
+!/model_torch.py
+!/profile_ffn.py
+!/env/
+/env/*
+!/env/flake.nix
+!/env/flake.lock
+!/sources/
+/sources/*
+!/sources/hf/
+!/petri/
+__pycache__/

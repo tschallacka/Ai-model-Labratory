@@ -1,0 +1,907 @@
+<meta charset="utf-8">
+<title>Petri Dish</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&family=Inter:wght@400;500&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+/* Layout: full-bleed 3D canvas (one deliberate dark "lab bench" look); a slim top bar and a bottom control sheet float over it. */
+:root {
+  color-scheme: dark;
+  --bg: #0e1218; --panel: rgba(20, 26, 35, 0.92); --line: #2a3442; --fg: #e4e8ee; --muted: #8b96a6;
+  --pos: #f29e38; --neg: #4f9fe0; --dock: #ec5c9e; --accent: #ec5c9e;
+  --display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --body: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--body); overflow: hidden; }
+#app { position: fixed; inset: 0; }
+#c, #num { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#c { touch-action: none; }
+#num, #labels { pointer-events: none; }
+#labels { position: absolute; inset: 0; }
+.lbl { position: absolute; transform: translate(-50%, -100%); font: 500 12px var(--display); color: var(--muted);
+  white-space: nowrap; letter-spacing: 0.02em; text-shadow: 0 1px 3px var(--bg); }
+.lbl.hot { color: var(--fg); }
+header#top { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 8px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  background: linear-gradient(var(--bg), rgba(14, 18, 24, 0)); }
+.brand { font: 600 17px var(--display); letter-spacing: 0.01em; }
+.brand small { font: 400 12px var(--mono); color: var(--muted); margin-left: 6px; }
+select, input[type=text], button { font: 500 13px var(--body); color: var(--fg); background: #1a212c; border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 10px; }
+button { cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+#custom { min-width: 0; flex: 1 1 220px; }
+#numbers[aria-pressed="true"] { border-color: var(--accent); }
+#status { font: 12px var(--mono); color: var(--muted); }
+#status.err { color: var(--pos); }
+section#panel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
+  padding-top: 8px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 8px; backdrop-filter: blur(6px); }
+#tokens { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.tok { flex: none; font: 12px var(--mono); padding: 3px 6px; border-radius: 4px; background: #1a212c; border: 1px solid var(--line); color: var(--fg); }
+.tok.after { opacity: 0.35; }
+.tok.sel { border-color: var(--accent); color: #fff; background: #3a1f2e; }
+.ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.ctrl .grp { display: flex; gap: 6px; align-items: center; }
+#layer { width: min(260px, 40vw); accent-color: var(--accent); }
+.num { font: 13px var(--mono); font-variant-numeric: tabular-nums; min-width: 2.2em; display: inline-block; }
+#steps { display: flex; gap: 4px; flex-wrap: wrap; }
+#steps button { padding: 4px 7px; font: 11px var(--mono); }
+#steps button.on, #headPick button.on { border-color: var(--accent); color: #fff; background: #3a1f2e; }
+.info { display: grid; gap: 4px; max-width: 72ch; }
+.info h2 { margin: 0; font: 600 15px var(--display); text-wrap: balance; }
+#plain { margin: 0; color: var(--fg); font-size: 14px; }
+#tech { margin: 0; color: #aab3c0; font-size: 12px; }
+#tech::before { content: "Technical: "; color: var(--muted); font-weight: 500; }
+#headPick { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); }
+#headPick button { padding: 3px 7px; font: 11px var(--mono); }
+#stats { font: 12px/1.5 var(--mono); color: var(--fg); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+#stats b { color: var(--dock); font-weight: 400; }
+#stats .ok { color: #7fd18b; }
+#tip { position: absolute; pointer-events: none; font: 12px var(--mono); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 8px; max-width: 260px; }
+details#about { font-size: 12px; color: var(--muted); }
+details#about summary { cursor: pointer; }
+details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; }
+#panel.compact #tech, #panel.compact #about { display: none; }
+#panel.compact .info h2 { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#panel.compact #plain { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+#panel.compact #stats { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#track { font: 12px/1.5 var(--mono); color: var(--fg); background: #2a2230; border: 1px solid var(--accent); border-radius: 6px; padding: 4px 8px; }
+#track .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: #fff0f8; box-shadow: 0 0 6px var(--accent); margin-right: 6px; vertical-align: 0; }
+#track button { padding: 0 6px; margin-left: 6px; font-size: 12px; }
+@media (max-width: 640px) {
+  .brand small { display: none; }
+  .brand { font-size: 15px; }
+  header#top { gap: 6px 8px; padding-top: calc(env(safe-area-inset-top, 0px) + 6px); padding-bottom: 4px; }
+  header#top select, header#top button { padding: 4px 8px; }
+  #status.ok { display: none; }
+  section#panel { gap: 6px; padding-top: 6px; }
+  .ctrl { gap: 6px 8px; }
+  .ctrl button { padding: 4px 9px; }
+  #steps button { padding: 3px 6px; }
+  #layer { width: 34vw; }
+}
+</style>
+<!--PETRI_STATIC-->
+<div id="app">
+  <canvas id="c" aria-label="3D view of one transformer layer"></canvas>
+  <canvas id="num" aria-hidden="true"></canvas>
+  <div id="labels"></div>
+  <div id="tip" hidden></div>
+  <header id="top">
+    <div class="brand">Petri Dish<small>SmolLM2-135M · docking</small></div>
+    <select id="prompt" aria-label="Sample prompt"></select>
+    <input id="custom" class="live-only" type="text" placeholder="Trace your own prompt (live only)" hidden>
+    <button id="run" class="live-only" hidden>Trace</button>
+    <button id="overview" title="Show the whole layer">Whole layer</button>
+    <button id="numbers" aria-pressed="true" title="Print values on cubes large enough to read; zoom in to see more">Numbers</button>
+    <span id="status">loading…</span>
+  </header>
+  <section id="panel">
+    <div id="tokens" role="listbox" aria-label="Token to follow"></div>
+    <div class="ctrl">
+      <div class="grp">
+        <button id="prev" aria-label="Previous step">◀</button>
+        <button id="play" aria-label="Play">Play</button>
+        <button id="next" aria-label="Next step">▶</button>
+        <button id="detail" aria-expanded="true" aria-controls="panel">Less</button>
+      </div>
+      <div class="grp"><label for="layer">Layer</label><input id="layer" type="range" min="0" max="29" value="0"><span class="num" id="layerNum">1/30</span></div>
+      <div id="steps"></div>
+    </div>
+    <div class="info">
+      <h2 id="stepTitle"></h2>
+      <p id="plain"></p>
+      <div id="headPick" hidden></div>
+      <div id="track" hidden></div>
+      <div id="stats"></div>
+      <p id="tech"></p>
+    </div>
+    <details id="about">
+      <summary>About this trace</summary>
+      <div id="aboutBody"></div>
+    </details>
+  </section>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
+<script>window.THREE || document.write('<script src="vendor/three-0.159.0.min.js"><\/script>');</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const status = (msg, err, ok) => { const s = $('#status'); s.textContent = msg; s.classList.toggle('err', !!err); s.classList.toggle('ok', !!ok); };
+if (!window.THREE) { status('three.js did not load', true); return; }
+
+// ---------- data files (petri/trace.py pack_arrays) ----------
+const F16 = new Float32Array(65536);       // float16 bit pattern -> value
+for (let u = 0; u < 65536; u++) {
+  const s = u & 0x8000 ? -1 : 1, e = (u >> 10) & 31, f = u & 1023;
+  F16[u] = e === 0 ? s * f * 2 ** -24 : e === 31 ? (f ? NaN : s * Infinity) : s * 2 ** (e - 15) * (1 + f / 1024);
+}
+const DT = { int8: Int8Array, uint8: Uint8Array, uint16: Uint16Array, int16: Int16Array, float16: Uint16Array, float32: Float32Array, int32: Int32Array };
+function parsePack(buf) {
+  if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== 'PTRI') throw new Error('not a petri file');
+  const hlen = new DataView(buf).getUint32(4, true);
+  const h = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, 8, hlen)));
+  const base = 8 + hlen, a = {};
+  for (const [name, s] of Object.entries(h.sections)) a[name] = new DT[s.dtype](buf, base + s.offset, s.shape.reduce((x, y) => x * y, 1));
+  return { h, a };
+}
+async function fetchPack(fetcher) {
+  const r = await fetcher();
+  if (!r.ok) { let m = r.statusText; try { m = (await r.json()).error; } catch (_) {} throw new Error(m); }
+  // The artifact host serves no binary types, so the static build ships these as base64 text.
+  const b64 = /\.b64\.txt(\?|$)/.test(r.url);
+  return parsePack(b64 ? Uint8Array.from(atob((await r.text()).trim()), ch => ch.charCodeAt(0)).buffer : await r.arrayBuffer());
+}
+// n values of vector number idx in a section, as floats (float16 sections, or int8/int16 with one scale per vector)
+function vecOf(P, name, idx, n) {
+  const arr = P.a[name], out = new Float32Array(n), o = idx * n;
+  if (P.h.sections[name].dtype === 'float16') for (let i = 0; i < n; i++) out[i] = F16[arr[o + i]];
+  else { const s = P.a[name + '_scale'][idx]; for (let i = 0; i < n; i++) out[i] = arr[o + i] * s; }
+  return out;
+}
+const deq = (name, l, t, n, g = 0, heads = 1) => vecOf(tr, name, (l * tr.T + t) * heads + g, n);
+// Colour scale: the 98th percentile of |v|, so a few giant outlier values saturate instead of washing out the rest.
+function robust(v) { const a = Array.from(v, Math.abs).sort((x, y) => x - y); return a[Math.floor((a.length - 1) * 0.98)] || a[a.length - 1] || 1; }
+const scaled = v => { const s = robust(v) || 1; return v.map(x => x / s); };
+const showTok = s => (s === '' ? '∅' : s.replace(/ /g, '·').replace(/\n/g, '↵'));
+const f3 = x => (Math.abs(x) >= 100 ? x.toFixed(0) : Math.abs(x) >= 10 ? x.toFixed(1) : x.toFixed(3));
+
+// ---------- scene ----------
+const canvas = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x0e1218);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 3000);
+scene.add(new THREE.AmbientLight(0xffffff, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.8); sun.position.set(-30, 50, 80); scene.add(sun);
+
+const C3 = hex => { const c = new THREE.Color(hex); return [c.r, c.g, c.b]; };
+const NEUTRAL = C3('#29313d'), POS = C3('#f29e38'), NEG = C3('#4f9fe0'), DOCK = C3('#ec5c9e'), UNDOCK = C3('#3a4352'),
+      MARK = C3('#aab3c0'), SEL = C3('#ffffff'), SLAB = C3('#262e3a');
+function valColor(t) {          // t = value / colour scale; beyond ±1 saturates
+  const a = Math.pow(Math.min(1, Math.abs(t)), 0.7), tg = t >= 0 ? POS : NEG;
+  return [NEUTRAL[0] + (tg[0] - NEUTRAL[0]) * a, NEUTRAL[1] + (tg[1] - NEUTRAL[1]) * a, NEUTRAL[2] + (tg[2] - NEUTRAL[2]) * a];
+}
+const headColor = h => { const c = new THREE.Color().setHSL(h / 9, 0.7, 0.62); return [c.r, c.g, c.b]; };
+
+let selIdx = -1;     // tracked position (0..575), or -1
+class Group {
+  constructor(n, size) {
+    this.n = n; this.size = size; this.vals = new Float32Array(n);     // vals: the number printed on each cube
+    this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshLambertMaterial({ color: 0xffffff }), n);
+    this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
+    this.mesh.frustumCulled = false;
+    for (const k of ['cur', 'from', 'to']) this[k] = { p: new Float32Array(n * 3), s: new Float32Array(n * 3), c: new Float32Array(n * 3) };
+    this.t0 = 0; this.dur = 0; this.anim = false;
+    scene.add(this.mesh);
+  }
+  set(i, p, s, c) {           // target for instance i; s = scalar or [sx, sy, sz]; c = [r, g, b] or null (keep)
+    const T = this.to, j = i * 3;
+    T.p[j] = p[0]; T.p[j + 1] = p[1]; T.p[j + 2] = p[2];
+    if (typeof s === 'number') { T.s[j] = T.s[j + 1] = T.s[j + 2] = s; } else { T.s[j] = s[0]; T.s[j + 1] = s[1]; T.s[j + 2] = s[2]; }
+    if (c) { T.c[j] = c[0]; T.c[j + 1] = c[1]; T.c[j + 2] = c[2]; }
+  }
+  hideAll() { this.to.s.fill(0); }
+  begin(dur, now) {
+    this.from.p.set(this.cur.p); this.from.s.set(this.cur.s); this.from.c.set(this.cur.c);
+    this.t0 = now; this.dur = dur; this.anim = true;
+  }
+  step(now) {
+    if (!this.anim) return false;
+    let k = this.dur > 0 ? (now - this.t0) / this.dur : 1;
+    if (k >= 1) { k = 1; this.anim = false; }
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    for (const f of ['p', 's', 'c']) {
+      const a = this.from[f], b = this.to[f], c = this.cur[f];
+      for (let j = 0; j < c.length; j++) c[j] = a[j] + (b[j] - a[j]) * e;
+    }
+    this.write();
+    return true;
+  }
+  write() {
+    // Tracking: the tapped position glows (bigger, near-white) in every linked group; everything else dims.
+    const m = new THREE.Matrix4(), P = this.cur.p, S = this.cur.s, Cc = this.cur.c, sel = selIdx >= 0;
+    for (let i = 0; i < this.n; i++) {
+      const j = i * 3;
+      let sx = S[j] || 1e-4, sy = S[j + 1] || 1e-4, sz = S[j + 2] || 1e-4, r = Cc[j], g = Cc[j + 1], b = Cc[j + 2];
+      if (sel) {
+        if (this.linked && i === selIdx && S[j] > 0.05) { sx *= 1.5; sy *= 1.5; sz *= 1.5; r = 1; g = 0.88; b = 0.96; }
+        else if (this.name !== 'EB') { r *= 0.35; g *= 0.35; b *= 0.35; }
+      }
+      m.makeScale(sx, sy, sz);
+      m.setPosition(P[j], P[j + 1], P[j + 2]);
+      this.mesh.setMatrixAt(i, m);
+      this.mesh.instanceColor.setXYZ(i, r, g, b);
+    }
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.instanceColor.needsUpdate = true;
+  }
+}
+const G = {
+  R: new Group(576, 0.8), Q: new Group(576, 0.8), K: new Group(192, 0.8), V: new Group(192, 0.8),
+  TK: new Group(96, 1), B: new Group(48, 1), F: new Group(576, 0.8),
+  EB: new Group(48, 1),                                            // embedding table, drawn as 48 slabs
+  NW: new Group(576, 0.8), NP: new Group(576, 0.8), NS: new Group(2, 0.8),   // inside-a-head demo
+};
+for (const [k, g] of Object.entries(G)) { g.name = k; g.linked = ['R', 'Q', 'F', 'NW', 'NP'].includes(k); g.write(); }
+
+// Curved lines (attention arcs, docking links, projection beams) with per-vertex alpha.
+const MAXV = 40000;
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(MAXV * 3), 3));
+lineGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAXV * 4), 4));
+const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
+const lines = new THREE.LineSegments(lineGeo, lineMat); lines.frustumCulled = false; scene.add(lines);
+let lineFade = { from: 0, to: 0, t0: 0 };
+function setLines(segs) {
+  const P = lineGeo.attributes.position.array, Cc = lineGeo.attributes.color.array, N = 14;
+  let v = 0;
+  for (const s of segs) {
+    if (v + N * 2 > MAXV) break;
+    const [ax, ay, az] = s.a, [bx, by, bz] = s.b, mz = (az + bz) / 2 + (s.bulge || 0);
+    const pt = k => { const u = k / N, w = 1 - u;
+      return [w * w * ax + 2 * w * u * ((ax + bx) / 2) + u * u * bx, w * w * ay + 2 * w * u * ((ay + by) / 2) + u * u * by, w * w * az + 2 * w * u * mz + u * u * bz]; };
+    for (let k = 0; k < N; k++) for (const q of [pt(k), pt(k + 1)]) {
+      P[v * 3] = q[0]; P[v * 3 + 1] = q[1]; P[v * 3 + 2] = q[2];
+      Cc[v * 4] = s.c[0]; Cc[v * 4 + 1] = s.c[1]; Cc[v * 4 + 2] = s.c[2]; Cc[v * 4 + 3] = s.alpha; v++;
+    }
+  }
+  lineGeo.setDrawRange(0, v);
+  lineGeo.attributes.position.needsUpdate = true; lineGeo.attributes.color.needsUpdate = true;
+  lineFade = { from: 0, to: segs.length ? 1 : 0, t0: performance.now() };
+}
+
+// ---------- layout ----------
+const EX = -64, BX = 48, CX = 86, DX = 116, FX = 166, GX = 214, WY = -22, PY = -44, SY = -58, DIALX = 12, DIALR = 6;
+const gridPos = (i, x0, y0, z = 0) => [x0 + (i % 32) - 15.5, y0 + 8.5 - Math.floor(i / 32), z];
+const residPos = (i, x0, z = 0) => gridPos(i, x0, 0, z);
+const slabC = h => [BX + ((h % 3) - 1) * 10, (1 - Math.floor(h / 3)) * 10];
+const headCell = (h, i) => { const [cx, cy] = slabC(h); return [cx + (i % 8) - 3.5, cy + 3.5 - Math.floor(i / 8), 0]; };
+const kvC = (g, side) => [BX + side * 22, (1 - g) * 10];
+const kvCell = (g, i, side) => { const [cx, cy] = kvC(g, side); return [cx + (i % 8) - 3.5, cy + 3.5 - Math.floor(i / 8), -2]; };
+const blockPos = b => [FX + ((b % 8) - 3.5) * 4, (2.5 - Math.floor(b / 8)) * 4, 0];
+const tokSp = () => Math.min(1.6, 34 / Math.max(tr.T - 1, 1));
+const tokPos = j => [CX, ((tr.T - 1) / 2) * tokSp() - j * tokSp(), 0];
+const slabY = k => 20 - k * 0.88;
+const tokSlab = () => Math.min(47, Math.floor((tr.h.ids[tok] / tr.h.model.vocab) * 48));
+
+// ---------- steps ----------
+// plain: everyday explanation, shown by default. tech: the technical version, shown under Details.
+// cam(ph): [centre x, width to fit, centre y, height to fit]. phases: sub-steps played in order, gap ms apart.
+let tr = null, W = null, layer = 0, tok = 0, step = 1, phase = 0, gen = 0, demoHead = 0, busyUntil = 0;
+const STEPS = [
+  { key: 'embed', short: 'text→numbers', t: 'From text to numbers', phases: 2, gap: 1300,
+    plain: 'Computers cannot read words, only numbers. The text is cut into pieces called tokens, and each token has an ID number. The model looks that number up in a big table and copies out its row: 576 numbers that are the token\'s starting description.',
+    tech: 'Token embedding: row <id> of the 49,152 × 576 embedding matrix (SmolLM2 ties it to the output layer). This row is the residual stream entering layer 1.',
+    cam: ph => (ph === 0 ? [EX, 50, 4, 44] : [(EX + 0) / 2, 112, 4, 44]) },
+  { key: 'in', short: 'in', t: 'The stream', phases: 1,
+    plain: 'This is the token\'s "stream": 576 numbers that together describe it. Every layer reads the stream and adds a small correction to it. Orange cubes are positive numbers, blue ones negative, and brighter means bigger.',
+    tech: 'Residual stream entering the layer. Colour is relative to the 98th percentile of |value| in this vector; a few outlier dimensions saturate.',
+    cam: () => [0, 42, 0, 26] },
+  { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 7, gap: 1800,
+    plain: 'How one number of a head is made. The stream is shown as bars: longer means bigger. First it is evened out: every bar is scaled by the same amount, like a volume knob, so the row has a standard loudness, and each position then gets its own small fixed boost or damping. Then each of the 576 numbers is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
+    tech: 'RMSNorm x / √(mean(x²) + ε) × g, with g the learned per-dimension gain. One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). Shown: the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
+    cam: ph => [[0, 40, 0, 30], [0, 40, 0, 30], [0, 44, -11, 50], [0, 44, -22, 74], [0, 44, -29, 78], [8, 40, SY, 30], [BX / 2, 84, -18, 90]][ph] },
+  { key: 'qkv', short: 'q k v', t: 'All the heads', phases: 1,
+    plain: 'That same recipe runs for every number, each with its own weights. The result: 9 "question" blocks (what is this token looking for?), plus 3 "label" blocks and 3 "content" blocks that every token offers to the others. Each label and content block is shared by the 3 question blocks in its row.',
+    tech: 'RMSNorm, then W_q, W_k, W_v. The query becomes 9 heads of 64; keys and values have 3 heads each, shared by 3 query heads (grouped-query attention). Each value mixes all 576 inputs, so these cubes appear rather than move.',
+    cam: () => [BX, 74, 0, 26] },
+  { key: 'attend', short: 'attend', t: 'Attention: looking back', phases: 1,
+    plain: 'Each question block compares its question with the label of every earlier token, and with its own. Good matches get a high score. The lines show where each of the 9 blocks is looking: thicker means more attention. Tokens that come later cannot be seen.',
+    tech: 'Scaled dot product q·k/√64 against this and every earlier position, softmax, causal mask. Line strength = attention weight.',
+    cam: () => [(BX - 26 + CX) / 2, 88, 0, 26] },
+  { key: 'headsout', short: 'heads out', t: 'What each head found', phases: 1,
+    plain: 'Each question block now collects the content of the tokens it looked at, mixed in proportion to how much it looked. Each block ends up with 64 numbers: a summary of what it found.',
+    tech: 'Head output = attention-weighted sum of the value vectors.',
+    cam: () => [BX, 74, 0, 26] },
+  { key: 'concat', short: 'concat', t: 'Side by side, then mixed', phases: 2, gap: 850,
+    plain: 'The 9 summaries are laid side by side to make 576 numbers again; these cubes really move, because nothing is calculated here. Then one more weighted mix (the recipe from "inside a head", 576 times over) turns them into one update for the stream.',
+    tech: 'Concatenate the 9 heads (a true reshape), then W_o.',
+    cam: () => [DX - 30, 104, 0, 26] },
+  { key: 'add', short: 'add', t: 'Add to the stream', phases: 2, gap: 850,
+    plain: 'The update is added onto the stream. Nothing is thrown away: every layer only adds its own correction.',
+    tech: 'Residual connection: x ← x + attention output.',
+    cam: () => [DX, 44, 0, 26] },
+  { key: 'dock', short: 'dock', t: 'The thinking part, and docking', phases: 1,
+    plain: 'Now 1536 small pattern detectors each check the stream, shown as 48 blocks of 32. Pink blocks are the ones that mattered most for this token: together they make up 90% of what this part adds. Grey blocks did run, but added little. That gap is what docking hopes to skip.',
+    tech: 'RMSNorm, then the SwiGLU FFN: 1536 units (silu(gate) × up), grouped in 48 co-docking clusters of 32. Block depth = share of the FFN output. Docked = the fewest blocks carrying 90% of Σ|activation| × ‖W_down column‖. All 48 ran: this is the oracle set, not a skip.',
+    cam: () => [(DX + FX) / 2, 94, 0, 26] },
+  { key: 'down', short: 'down', t: 'Back into the stream', phases: 2, gap: 850,
+    plain: 'The detectors\' answers are combined back into 576 numbers and added to the stream. Below: the token the model would guess next if it stopped right here. Early layers guess badly; later layers get better.',
+    tech: 'W_down merges the 1536 units back to 576, added to the residual. Logit lens: final norm + output layer applied to the stream after this layer.',
+    cam: () => [(FX + GX) / 2, 112, 0, 26] },
+];
+const SI = Object.fromEntries(STEPS.map((S, i) => [S.key, i]));
+const stepAvail = i => STEPS[i].key !== 'embed' || layer === 0;
+
+const LABELS = [
+  { t: 'embedding table · one row per token · 49,152 rows × 576', p: () => [EX, 21.6, 0], keys: ['embed'] },
+  { t: '', p: () => [EX + 18, slabY(tokSlab()) + 0.6, 0], keys: ['embed'], hot: true, text: () => `“${showTok(tr.h.tokens[tok])}” = ID ${tr.h.ids[tok]}` },
+  { t: 'the stream · 576 numbers', p: () => [0, 10.5, 0], keys: ['embed', 'in', 'qkv', 'attend', 'headsout', 'concat'], minPh: { embed: 1 } },
+  { t: 'the stream as it arrives · bar length = size', p: () => [0, 10.5, 0], keys: ['head'], maxPh: { head: 0 } },
+  { t: '', p: () => [0, 10.5, 0], keys: ['head'], minPh: { head: 1 }, text: () => (W && tr ? `evened out: every bar × ${headDemo(layer, tok, demoHead).factor.toFixed(2)}, then its own boost` : 'evened out') },
+  { t: 'one row of 576 weights', p: () => [0, WY + 10.5, 0], keys: ['head'], minPh: { head: 2 } },
+  { t: 'each number × its weight', p: () => [0, PY + 10.5, 0], keys: ['head'], minPh: { head: 3 }, maxPh: { head: 3 } },
+  { t: 'added up: one number, and its partner', p: () => [0, SY + 2, 0], keys: ['head'], minPh: { head: 4 }, maxPh: { head: 4 } },
+  { t: 'the pair as an arrow · grey before, pink after the turn', p: () => [DIALX, SY + DIALR + 2.5, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, hot: true },
+  { t: '', p: () => { const [cx, cy] = slabC(demoHead); return [cx, cy + 5, 0]; }, keys: ['head'], minPh: { head: 6 }, hot: true, text: () => `lands in question block ${demoHead}` },
+  { t: 'the stream', p: () => [DX, 10.5, 0], keys: ['add', 'dock'] },
+  { t: 'the stream', p: () => [GX, 10.5, 0], keys: ['down'] },
+  { t: 'questions · 9 heads × 64', p: () => [BX, 15.5, 0], keys: ['qkv', 'attend', 'headsout'] },
+  { t: 'labels (keys) · 3 shared', p: () => [BX - 22, 15.5, 0], keys: ['qkv', 'attend'] },
+  { t: 'contents (values) · 3 shared', p: () => [BX + 22, 15.5, 0], keys: ['qkv', 'attend'] },
+  { t: 'tokens so far', p: () => [CX, tokPos(0)[1] + 2, 0], keys: ['attend', 'headsout'] },
+  { t: 'side by side → mixed', p: () => [DX, 10.5, 0], keys: ['concat'] },
+  { t: 'detectors · 48 blocks of 32', p: () => [FX, 13, 0], keys: ['dock', 'down'] },
+  { t: 'their answer · 576', p: () => [GX, -10, 2], keys: ['down'] },
+];
+for (const L of LABELS) { L.el = document.createElement('div'); L.el.className = 'lbl' + (L.hot ? ' hot' : ''); L.el.textContent = L.t; $('#labels').appendChild(L.el); }
+
+// The inside-a-head arithmetic, done here from the weights file and checked against the recorded trace.
+function wrow(name, idx, n) { const arr = W.a[name], s = W.a[name + '_scale'][idx], o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = arr[idx * n + i] * s; return o; }
+function headDemo(l, t, h) {
+  const m = W.h.model, x = deq('resid', l, t, 576);
+  let ms = 0; for (const v of x) ms += v * v; ms /= 576;
+  const factor = 1 / Math.sqrt(ms + m.eps), g = wrow('an', l, 576);
+  const n = x.map((v, i) => v * factor * g[i]);
+  const p = W.a.pair[l * 9 + h];
+  const wa = wrow('wq', (l * 9 + h) * 2, 576), wb = wrow('wq', (l * 9 + h) * 2 + 1, 576);
+  const pa = n.map((v, i) => v * wa[i]);
+  let a = 0, b = 0, imax = 0;
+  for (let i = 0; i < 576; i++) { a += pa[i]; b += n[i] * wb[i]; if (Math.abs(pa[i]) > Math.abs(pa[imax])) imax = i; }
+  const ang = t * Math.pow(m.rope_base, (-2 * p) / m.HD), c = Math.cos(ang), s = Math.sin(ang);
+  const rec = deq('q', l, t, 64, h, 9);
+  return { x, factor, n, p, wa, pa, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
+}
+
+// The turn as a dial: the pair (first number, partner) is an arrow from the centre. Grey = before, pink = after,
+// yellow arc = how far it turned (whole extra turns are left out of the arc and named in the panel).
+function dialSegs(d) {
+  const cx = DIALX, cy = SY, R = DIALR, z = 0.5, segs = [];
+  for (let k = 0; k < 48; k++) {
+    const a0 = (k / 48) * 2 * Math.PI, a1 = ((k + 1) / 48) * 2 * Math.PI;
+    segs.push({ a: [cx + R * Math.cos(a0), cy + R * Math.sin(a0), z], b: [cx + R * Math.cos(a1), cy + R * Math.sin(a1), z], c: MARK, alpha: 0.3 });
+  }
+  segs.push({ a: [cx - R - 1.5, cy, z], b: [cx + R + 1.5, cy, z], c: MARK, alpha: 0.18 });
+  segs.push({ a: [cx, cy - R - 1.5, z], b: [cx, cy + R + 1.5, z], c: MARK, alpha: 0.18 });
+  const arrow = (x, y, col) => {
+    const L = Math.hypot(x, y) || 1, ux = x / L, uy = y / L, ex = cx + ux * R, ey = cy + uy * R;
+    segs.push({ a: [cx, cy, z], b: [ex, ey, z], c: col, alpha: 1 });
+    for (const sgn of [1, -1]) segs.push({ a: [ex, ey, z], b: [ex - ux * 1.3 - sgn * uy * 0.7, ey - uy * 1.3 + sgn * ux * 0.7, z], c: col, alpha: 1 });
+  };
+  const from = Math.atan2(d.b, d.a), turn = ((d.ang % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), n = Math.max(2, Math.ceil(turn / 0.08));
+  for (let k = 0; k < n; k++) {
+    const a0 = from + (turn * k) / n, a1 = from + (turn * (k + 1)) / n, r = R * 0.45;
+    segs.push({ a: [cx + r * Math.cos(a0), cy + r * Math.sin(a0), z], b: [cx + r * Math.cos(a1), cy + r * Math.sin(a1), z], c: POS, alpha: 0.95 });
+  }
+  arrow(d.a, d.b, MARK); arrow(d.qa, d.qb, DOCK);
+  return segs;
+}
+
+function buildState(s, ph) {
+  const T = tr.T, l = layer, t = tok, key = STEPS[s].key;
+  const rin = deq('resid', l, t, 576), ad = deq('attn_delta', l, t, 576), fd = deq('ffn_delta', l, t, 576);
+  const mid = rin.map((x, i) => x + ad[i]), rout = deq('resid', l + 1, t, 576);
+  const cat = (name, heads) => { const o = new Float32Array(heads * 64); for (let h = 0; h < heads; h++) o.set(deq(name, l, t, 64, h, heads), h * 64); return o; };
+  const qRaw = cat('q', 9), hoRaw = cat('ho', 9), kRaw = cat('k', 3), vRaw = cat('v', 3);
+  const perHead = (raw, heads) => { const o = new Float32Array(raw.length); for (let h = 0; h < heads; h++) o.set(scaled(raw.subarray(h * 64, h * 64 + 64)), h * 64); return o; };
+  const qn = perHead(qRaw, 9), hon = perHead(hoRaw, 9), kn = perHead(kRaw, 3), vn = perHead(vRaw, 3);
+  const demo = key === 'head' && W ? headDemo(l, t, demoHead) : null;
+  for (const g of Object.values(G)) g.hideAll();
+  const segs = [];
+  // the stream
+  let rx = 0, rz = 0, rraw = rin, rsc = 1;
+  if (key === 'add') { rx = DX; rz = ph === 0 ? -1.5 : 0; rraw = ph === 0 ? rin : mid; }
+  if (key === 'dock') { rx = DX; rraw = mid; }
+  if (key === 'down') { rx = ph === 0 ? DX : GX; rraw = ph === 0 ? mid : rout; }
+  if (demo) rraw = ph === 0 ? demo.x : demo.n;
+  const rv = scaled(rraw);
+  // In the head step the stream is drawn as bars (depth = size) on one shared scale, the evened-out one,
+  // so evening out visibly shrinks or grows every bar.
+  const barS = demo ? robust(demo.n) || 1 : 1;
+  for (let i = 0; i < 576; i++) {
+    if (key === 'embed' && ph === 0) G.R.set(i, [EX + (i % 32) - 15.5, slabY(tokSlab()), 0.9], 0.3, valColor(rv[i]));
+    else if (demo) {
+      const d = 0.25 + Math.min(10, (Math.abs(rraw[i]) / barS) * 1.6), [px, py] = residPos(i, 0);
+      G.R.set(i, [px, py, d * 0.4], [1, 1, d], valColor(rraw[i] / barS));
+    } else G.R.set(i, residPos(i, rx, rz), 1, valColor(rv[i]));
+  }
+  G.R.vals.set(rraw);
+  // embedding table
+  for (let k = 0; k < 48; k++) G.EB.set(k, [EX, slabY(k), 0], key === 'embed' ? [32, 0.5, 1.2] : 0, k === tokSlab() ? DOCK : SLAB);
+  // inside a head: weights row, products, the summed pair, the turn, the landing
+  if (demo) {
+    const wv = scaled(demo.wa), pv = scaled(demo.pa);
+    for (let i = 0; i < 576; i++) {
+      G.NW.set(i, gridPos(i, 0, WY), ph >= 2 ? 1 : 0, valColor(wv[i]));
+      if (ph <= 3) G.NP.set(i, gridPos(i, 0, PY), ph === 3 ? 1 : 0, valColor(pv[i]));
+      else G.NP.set(i, [-1.2, SY, 0], 0, null);                   // all products fly into the sum
+    }
+    G.NW.vals.set(demo.wa); G.NP.vals.set(demo.pa);
+    const sumScale = Math.max(Math.abs(demo.a), Math.abs(demo.b), Math.abs(demo.qa), Math.abs(demo.qb)) || 1;
+    if (ph === 4 || ph === 5) {
+      const [va, vb] = ph === 4 ? [demo.a, demo.b] : [demo.qa, demo.qb];
+      G.NS.set(0, [-1.2, SY, 0], 1.8, valColor(va / sumScale)); G.NS.set(1, [1.2, SY, 0], 1.8, valColor(vb / sumScale));
+      G.NS.vals[0] = va; G.NS.vals[1] = vb;
+    } else if (ph === 6) {
+      G.NS.set(0, headCell(demoHead, 2 * demo.p), 1.15, valColor(demo.qa / sumScale)); G.NS.set(1, headCell(demoHead, 2 * demo.p + 1), 1.15, valColor(demo.qb / sumScale));
+      G.NS.vals[0] = demo.qa; G.NS.vals[1] = demo.qb;
+    } else { G.NS.set(0, [-1.2, SY, 0], 0, null); G.NS.set(1, [1.2, SY, 0], 0, null); }
+    if (ph === 5) segs.push(...dialSegs(demo));
+  }
+  // question heads: in place for qkv/attend/headsout, flying to the concat plane, merging into the stream
+  const adn = scaled(ad);
+  for (let h = 0; h < 9; h++) for (let i = 0; i < 64; i++) {
+    const k = h * 64 + i;
+    if (key === 'qkv' || key === 'attend') G.Q.set(k, headCell(h, i), 1, valColor(qn[k]));
+    else if (key === 'headsout') G.Q.set(k, headCell(h, i), 1, valColor(hon[k]));
+    else if (key === 'concat') G.Q.set(k, residPos(k, DX, 0), 1, valColor(ph === 0 ? hon[k] : adn[k]));
+    else if (key === 'add') G.Q.set(k, residPos(k, DX, ph === 0 ? 1.5 : 0), ph === 0 ? 1 : 0, valColor(adn[k]));
+    else if (demo && ph === 6 && h === demoHead) G.Q.set(k, headCell(h, i), 0.35, SLAB);     // the slot the pair lands in
+    else G.Q.set(k, ['concat', 'add', 'dock', 'down'].includes(key) ? residPos(k, DX, 0) : headCell(h, i), 0, null);
+  }
+  G.Q.vals.set(key === 'qkv' || key === 'attend' ? qRaw : key === 'headsout' || (key === 'concat' && ph === 0) ? hoRaw : ad);
+  // shared keys and values
+  for (let g = 0; g < 3; g++) for (let i = 0; i < 64; i++) {
+    const k = g * 64 + i, vis = key === 'qkv' || key === 'attend' ? 1 : 0;
+    G.K.set(k, kvCell(g, i, -1), vis, valColor(kn[k]));
+    G.V.set(k, kvCell(g, i, 1), vis, valColor(vn[k]));
+  }
+  G.K.vals.set(kRaw); G.V.vals.set(vRaw);
+  // tokens so far
+  for (let j = 0; j < 96; j++) {
+    if (j >= T) { G.TK.set(j, [CX, 0, 0], 0, MARK); continue; }
+    const vis = key === 'attend' || key === 'headsout', sz = Math.min(1.1, tokSp() * 0.8);
+    G.TK.set(j, tokPos(j), vis ? (j > t ? sz * 0.45 : sz) : 0, j === t ? SEL : j > t ? UNDOCK : MARK);
+  }
+  // FFN blocks
+  const bo = (l * T + t) * 48;
+  for (let b = 0; b < 48; b++) {
+    const share = tr.a.bshare[bo + b] / 255, docked = tr.a.bdock[bo + b] === 1, vis = key === 'dock' || key === 'down';
+    const depth = 0.4 + Math.min(9, share * 60);
+    const c = docked ? DOCK.map(x => x * (0.55 + 0.45 * Math.min(1, share * 12))) : UNDOCK;
+    const p = blockPos(b);
+    G.B.set(b, [p[0], p[1], depth / 2], vis ? [3, 3, depth] : 0, c);
+    G.B.vals[b] = share * 100;
+    if (key === 'dock' && docked) segs.push({ a: [DX + 16, 0, 0], b: [p[0] - 1.5, p[1], depth], c: DOCK, alpha: 0.75, bulge: 6 });
+  }
+  // FFN output
+  const fdn = scaled(fd);
+  for (let i = 0; i < 576; i++) G.F.set(i, residPos(i, GX, ph === 0 ? 1.5 : 0), key === 'down' && ph === 0 ? 1 : 0, valColor(fdn[i]));
+  G.F.vals.set(fd);
+  // beams and attention arcs
+  if (key === 'qkv') {
+    for (let h = 0; h < 9; h++) { const [cx, cy] = slabC(h); segs.push({ a: [16, 0, 0], b: [cx - 4, cy, 0], c: MARK, alpha: 0.18, bulge: 2 }); }
+    for (let g = 0; g < 3; g++) { const [cx, cy] = kvC(g, -1); segs.push({ a: [16, 0, 0], b: [cx - 4, cy, -2], c: MARK, alpha: 0.18, bulge: 2 }); }
+  }
+  if (key === 'attend') {
+    for (let h = 0; h < 9; h++) {
+      const [cx, cy] = slabC(h), hc = headColor(h);
+      for (let j = 0; j <= t; j++) {
+        const w = tr.a.att[((l * 9 + h) * T + t) * T + j] / 255;
+        if (w < 0.02) continue;
+        segs.push({ a: [cx + 4, cy, 0.5], b: tokPos(j), c: hc, alpha: Math.min(1, 0.15 + w), bulge: 8 });
+      }
+    }
+  }
+  if (key === 'embed' && ph === 1) segs.push({ a: [EX + 16, slabY(tokSlab()), 0.6], b: [-16, 0, 0], c: DOCK, alpha: 0.5, bulge: 4 });
+  return segs;
+}
+
+let camFrom = [0, 42, 0, 26], camTo = [0, 42, 0, 26], camCur = [0, 42, 0, 26], camT0 = 0, theta = -0.42, phi = 0.2, zoom = 1, overview = false;
+let lastStepShown = -1;
+function apply(s, ph, dur) {
+  phase = ph;
+  const segs = buildState(s, ph), now = performance.now();
+  for (const g of Object.values(G)) g.begin(dur, now);
+  setLines(segs);
+  if (dur === 0) lineFade.from = lineFade.to;
+  if (s !== lastStepShown) { pan.set(0, 0, 0); lastStepShown = s; }   // a new step re-centres; a new token keeps the view
+  camFrom = camCur.slice(); camTo = overview ? [(EX + GX) / 2, 300, 0, 26] : STEPS[s].cam(ph); camT0 = dur ? now : now - 1e6;
+  dirty = true;
+  renderUI();
+}
+// Show one part (phase) of a step. Parts never advance on their own: ▶ or Play moves on.
+const PARTS = {
+  embed: ['the lookup', 'into the stream'],
+  head: ['as it arrives', 'evened out', 'the weights', 'multiply', 'add up', 'turn', 'land'],
+  concat: ['side by side', 'mixed'],
+  add: ['the update arrives', 'added'],
+  down: ['the detectors\' answer', 'added'],
+};
+function go(newStep, animate = true, ph = 0) {
+  step = newStep; ++gen;
+  apply(step, Math.max(0, Math.min(ph, STEPS[step].phases - 1)), animate ? 650 : 0);
+  busyUntil = performance.now() + (animate ? 700 : 0);
+}
+
+// ---------- UI ----------
+const fmtPct = x => (x * 100).toFixed(1) + '%';
+function renderUI() {
+  if (!tr) return;
+  const T = tr.T, l = layer, t = tok, S = STEPS[step], key = S.key;
+  $('#layer').value = l; $('#layer').max = tr.L - 1; $('#layerNum').textContent = `${l + 1}/${tr.L}`;
+  document.querySelectorAll('#steps button').forEach((b, i) => { b.classList.toggle('on', i === step); b.hidden = !stepAvail(i); });
+  document.querySelectorAll('.tok').forEach((b, j) => { b.classList.toggle('sel', j === t); b.classList.toggle('after', j > t); b.setAttribute('aria-selected', j === t); });
+  // The part goes first: on a phone the title is cut off after ~40 characters.
+  const part = S.phases > 1 ? ` · part ${phase + 1}/${S.phases}: ${PARTS[key][phase]}` : '';
+  $('#stepTitle').textContent = `Layer ${l + 1}${part} · ${S.t} · token “${showTok(tr.h.tokens[t])}”`;
+  $('#plain').textContent = S.plain;
+  $('#tech').textContent = S.tech.replace('<id>', tr.h.ids[t]);
+  $('#headPick').hidden = key !== 'head';
+  document.querySelectorAll('#headPick button').forEach((b, h) => b.classList.toggle('on', h === demoHead));
+  let st = '';
+  const i = l * T + t;
+  if (key === 'embed') st = `token “${showTok(tr.h.tokens[t])}” → ID ${tr.h.ids[t]} → row ${tr.h.ids[t]} of ${tr.h.model.vocab.toLocaleString('en')} → 576 numbers`;
+  if (key === 'in') { const v = deq('resid', l, t, 576); st = `size of the stream (‖x‖) = ${Math.hypot(...v).toFixed(2)} · biggest single number: ${f3(v.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0))}`; }
+  if (key === 'head') {
+    if (!W) st = 'weights file not loaded';
+    else {
+      const d = headDemo(l, t, demoHead);
+      const turns = Math.floor(d.ang / (2 * Math.PI)), deg = ((d.ang % (2 * Math.PI)) * 180) / Math.PI;
+      st = [
+        `the stream as it arrives · biggest bar: ${f3(d.x.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0))}`,
+        `evening out: every number × ${d.factor.toFixed(3)} (1 ÷ the typical size of the row), then × its own fixed boost (0.0 to ${f3(Math.max(...Array.from(wrow('an', l, 576), Math.abs)))})`,
+        `question block ${demoHead}, numbers ${2 * d.p} and ${2 * d.p + 1} of its 64 · one weight for each of the 576 stream numbers`,
+        `576 multiplications · the biggest: #${d.imax}: ${f3(d.n[d.imax])} × ${f3(d.wa[d.imax])} = ${f3(d.pa[d.imax])}`,
+        `all 576 added up = <b>${f3(d.a)}</b> · its partner, same recipe with the next weight row = <b>${f3(d.b)}</b>`,
+        (t === 0 ? `the first token is not turned (position 0) → still <b>${f3(d.qa)}, ${f3(d.qb)}</b>`
+          : `turned ${deg.toFixed(0)}°${turns ? ` plus ${turns} full turn${turns > 1 ? 's' : ''}` : ''} (position ${t}) → <b>${f3(d.qa)}, ${f3(d.qb)}</b> · same length: ${Math.hypot(d.a, d.b).toFixed(2)}`) +
+          ` · this pair turns ${((Math.pow(W.h.model.rope_base, (-2 * d.p) / W.h.model.HD) * 180) / Math.PI).toPrecision(2)}° per token; the fastest pair (0) turns 57°, the slowest under 0.001°`,
+        `lands as numbers ${2 * d.p} and ${2 * d.p + 1} of question block ${demoHead}: <b>${f3(d.qa)}, ${f3(d.qb)}</b> · recorded in the trace: ${f3(d.recA)}, ${f3(d.recB)} ` +
+          (Math.max(Math.abs(d.qa - d.recA), Math.abs(d.qb - d.recB)) <= 0.02 * Math.max(...Array.from(d.rec, Math.abs)) + 1e-6 ? '<span class="ok">✓ match</span>' : '(differs: see About)'),
+      ][phase];
+    }
+  }
+  if (key === 'attend') {
+    st = Array.from({ length: 9 }, (_, h) => {
+      let best = 0, bw = -1;
+      for (let j = 0; j <= t; j++) { const w = tr.a.att[((l * 9 + h) * T + t) * T + j]; if (w > bw) { bw = w; best = j; } }
+      return `h${h}→“${showTok(tr.h.tokens[best])}” ${(bw / 255).toFixed(2)}`;
+    }).join(' · ');
+  }
+  if (key === 'add') { const a = deq('attn_delta', l, t, 576), r = deq('resid', l, t, 576); st = `size of the update / size of the stream = ${(Math.hypot(...a) / Math.hypot(...r)).toFixed(3)}`; }
+  if (key === 'dock') {
+    st = `docked: <b>${tr.a.k_blocks[i]}/48 blocks</b> (${tr.a.k_blocks[i] * 32} detectors) · finest possible: ${tr.a.k_units[i]}/1536 single detectors<br>` +
+         `error if only the docked blocks ran: ${fmtPct(tr.a.err_blocks[i])} · only the docked single detectors: ${fmtPct(tr.a.err_units[i])}`;
+  }
+  if (key === 'down') {
+    st = 'if it stopped here, the model would guess: ' + [0, 1, 2].map(k => {
+      const id = tr.a.lens_ids[i * 3 + k], p = tr.a.lens_p[i * 3 + k];
+      return `“${showTok(tr.h.lens_vocab[id] ?? '?')}” ${fmtPct(p)}`;
+    }).join(' · ');
+  }
+  $('#stats').innerHTML = st;
+  // The tracked position's journey through this layer.
+  const tk = $('#track');
+  tk.hidden = selIdx < 0;
+  if (selIdx >= 0) {
+    const k = selIdx, rin = deq('resid', l, t, 576)[k], ad = deq('attn_delta', l, t, 576)[k], fd = deq('ffn_delta', l, t, 576)[k];
+    let line;
+    if (key === 'head' && W) {
+      const d = headDemo(l, t, demoHead);
+      line = `position #${k}: arrives as ${f3(d.x[k])} → evened out ${f3(d.n[k])} → × weight ${f3(d.wa[k])} = ${f3(d.pa[k])}, one of the 576 parts of the sum`;
+    } else if (['qkv', 'attend', 'headsout'].includes(key)) {
+      line = `question block ${Math.floor(k / 64)}, number ${k % 64}: question ${f3(deq('q', l, t, 64, Math.floor(k / 64), 9)[k % 64])} → what it found ${f3(deq('ho', l, t, 64, Math.floor(k / 64), 9)[k % 64])} · after "concat" it sits at stream position #${k}`;
+    } else {
+      line = `position #${k}: in ${f3(rin)} · attention adds ${f3(ad)} → ${f3(rin + ad)} · detectors add ${f3(fd)} → out ${f3(rin + ad + fd)}`;
+    }
+    tk.innerHTML = `<span class="dot"></span>${line} <button id="untrack" aria-label="Stop tracking">×</button>`;
+    $('#untrack').onclick = () => setSel(-1);
+  }
+}
+function buildTokens() {
+  const box = $('#tokens'); box.textContent = '';
+  tr.h.tokens.forEach((s, j) => {
+    const b = document.createElement('button'); b.className = 'tok'; b.textContent = showTok(s); b.setAttribute('role', 'option');
+    b.onclick = () => { tok = j; go(step, false, phase); };
+    box.appendChild(b);
+  });
+  box.lastChild && box.lastChild.scrollIntoView({ inline: 'end', block: 'nearest' });
+}
+function buildAbout() {
+  const h = tr.h, bl = h.blocks;
+  const blocks = bl.kind === 'final'
+    ? `Clustered blocks from the profile run (${bl.path}).`
+    : `Clustered blocks are provisional: built from ${Object.values(bl.docs_per_domain).reduce((a, b) => a + b, 0)} documents in ${Object.keys(bl.docs_per_domain).join(', ')}, no chats yet. The profile run replaces them.`;
+  $('#aboutBody').innerHTML = '';
+  for (const line of [
+    `Model: ${h.model.name}, GGUF sha256 ${h.model.gguf_sha256.slice(0, 12)}…, ${h.model.L} layers.`,
+    `Prompt: ${h.source}. ${h.tokens.length} tokens.`,
+    blocks,
+    `Docking: the fewest blocks whose summed |activation| × ‖W_down column‖ reaches ${h.model.frac * 100}% at this token.`,
+    `Check: this trace's final state matches the verified forward pass to ${h.check_rel_diff.toExponential(1)} (relative).`,
+    'Storage: the stream, both updates and the keys as 16-bit floats (~3 digits); questions, contents and head outputs as 8-bit per vector, so "recorded" question values carry up to ~1% rounding.',
+    'Colours are relative to the 98th percentile of each vector (each head separately); the few giant values saturate.',
+    'One finger: orbit · two fingers: move and pinch-zoom · double-tap: reset the view · tap a cube to read it. Mouse: drag to orbit, right-drag or shift-drag to move, scroll to zoom.',
+  ]) { const d = document.createElement('div'); d.textContent = line; $('#aboutBody').appendChild(d); }
+}
+STEPS.forEach((S, i) => { const b = document.createElement('button'); b.textContent = S.short; b.onclick = () => { overview = false; stopPlay(); go(i); }; $('#steps').appendChild(b); });
+for (let h = 0; h < 9; h++) {
+  if (h === 0) { const s = document.createElement('span'); s.textContent = 'question block:'; $('#headPick').appendChild(s); }
+  const b = document.createElement('button'); b.textContent = h; b.setAttribute('aria-label', `question block ${h}`);
+  b.onclick = () => { demoHead = h; stopPlay(); go(SI.head, false, STEPS[step].key === 'head' ? phase : 0); }; $('#headPick').appendChild(b);
+}
+// ◀ / ▶ move one part at a time; a step's parts come before the next step.
+function stepBack() {
+  if (phase > 0) return go(step, true, phase - 1);
+  let s = step - 1;
+  while (s >= 0 && !stepAvail(s)) s--;
+  if (s >= 0) return go(s, true, STEPS[s].phases - 1);
+  if (layer > 0) { layer--; const last = STEPS.length - 1; go(last, false, STEPS[last].phases - 1); }
+}
+function advance() {
+  if (phase < STEPS[step].phases - 1) { go(step, true, phase + 1); return true; }
+  let s = step + 1;
+  while (s < STEPS.length && !stepAvail(s)) s++;
+  if (s < STEPS.length) go(s);
+  else if (layer < tr.L - 1) { layer++; go(SI.in, false); }
+  else return false;
+  return true;
+}
+$('#prev').onclick = () => { stopPlay(); overview = false; stepBack(); };
+$('#next').onclick = () => { stopPlay(); overview = false; advance(); };
+$('#layer').oninput = e => { layer = +e.target.value; if (!stepAvail(step)) step = SI.in; go(step, false, phase); };
+$('#overview').onclick = () => { overview = !overview; $('#overview').textContent = overview ? 'Follow step' : 'Whole layer'; go(step, false, phase); };
+let playTimer = null;
+function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; $('#play').textContent = 'Play'; } }
+$('#play').onclick = () => {
+  if (playTimer) return stopPlay();
+  $('#play').textContent = 'Pause'; overview = false;
+  const hold = matchMedia('(prefers-reduced-motion: reduce)').matches ? 2400 : 1500;
+  playTimer = setInterval(() => { if (performance.now() >= busyUntil + hold && !advance()) stopPlay(); }, 200);
+};
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'ArrowRight') $('#next').click(); else if (e.key === 'ArrowLeft') $('#prev').click();
+  else if (e.key === ' ') { e.preventDefault(); $('#play').click(); }
+});
+
+// ---------- loading ----------
+let config = null;
+async function loadTrace(fetcher) {
+  stopPlay(); status('tracing…');
+  let P;
+  try { P = await fetchPack(fetcher); } catch (e) { status(e.message, true); return; }
+  tr = { h: P.h, a: P.a, T: P.h.tokens.length, L: P.h.model.L };
+  tok = tr.T - 1; layer = Math.min(layer, tr.L - 1);
+  buildTokens(); buildAbout();
+  go(layer === 0 ? SI.embed : SI.in, false);
+  status(`${tr.T} tokens · ${tr.h.blocks.kind === 'final' ? 'final' : 'provisional'} blocks`, false, true);
+}
+async function init() {
+  try {
+    config = window.PETRI_STATIC || await (await fetch('api/prompts')).json();
+  } catch (e) { status('no trace source: open the live server or the published page', true); return; }
+  const sel = $('#prompt');
+  for (const p of config.prompts) { const o = document.createElement('option'); o.value = p.url; o.textContent = p.domain; sel.appendChild(o); }
+  sel.onchange = () => loadTrace(() => fetch(sel.value));
+  if (config.mode === 'live') {
+    document.querySelectorAll('.live-only').forEach(el => { el.hidden = false; });
+    const run = () => { const text = $('#custom').value.trim(); if (text) loadTrace(() => fetch('api/trace', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })); };
+    $('#run').onclick = run; $('#custom').onkeydown = e => { if (e.key === 'Enter') run(); };
+  }
+  if (config.weights) fetchPack(() => fetch(config.weights)).then(P => { W = P; if (tr && STEPS[step].key === 'head') go(step, false, phase); }).catch(() => {});
+  loadTrace(() => fetch(sel.value));
+}
+
+// ---------- camera, picking, render loop ----------
+// One finger / left mouse: orbit. Two fingers: move (centroid) and zoom (pinch) together.
+// Right mouse or shift-drag: move. Double-tap / double-click: reset the view.
+const pts = new Map(); let moved = 0, pinch0 = 0, zoom0 = 1, dirty = true, cent0 = null, lastDist = 50, lastTap = 0;
+const pan = new THREE.Vector3();
+const pdist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+const centroid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+function panBy(dxPx, dyPx) {
+  const k = (2 * lastDist * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / Math.max(canvas.clientHeight, 1);
+  pan.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), -dxPx * k);
+  pan.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1), dyPx * k);
+}
+function resetView() { theta = -0.42; phi = 0.2; zoom = 1; pan.set(0, 0, 0); dirty = true; }
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0;
+  if (pts.size === 2) { pinch0 = pdist(); zoom0 = zoom; cent0 = centroid(); }
+});
+canvas.addEventListener('pointermove', e => {
+  const p = pts.get(e.pointerId); if (!p) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+  moved += Math.abs(dx) + Math.abs(dy);
+  if (pts.size === 1) {
+    if (e.buttons === 2 || e.shiftKey) panBy(dx, dy);
+    else { theta -= dx * 0.005; phi = Math.max(-1.3, Math.min(1.3, phi + dy * 0.005)); }
+  } else if (pts.size === 2) {
+    zoom = Math.max(0.04, Math.min(4, (zoom0 * pinch0) / Math.max(pdist(), 1)));
+    const c = centroid();
+    if (cent0) panBy(c.x - cent0.x, c.y - cent0.y);
+    cent0 = c;
+  }
+  dirty = true;
+});
+const endPtr = e => {
+  if (pts.size === 1 && moved < 6) {
+    const now = performance.now();
+    if (now - lastTap < 320) { resetView(); $('#tip').hidden = true; lastTap = 0; } else { pick(e); lastTap = now; }
+  }
+  pts.delete(e.pointerId);
+  if (pts.size < 2) cent0 = null;
+  moved = Math.max(moved, 6);   // the finger left after a pinch must not count as a tap
+};
+canvas.addEventListener('pointerup', endPtr);
+canvas.addEventListener('pointercancel', e => { pts.delete(e.pointerId); if (pts.size < 2) cent0 = null; });
+canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.04, Math.min(4, zoom * Math.exp(e.deltaY * 0.0012))); dirty = true; }, { passive: false });
+
+function setSel(i) { selIdx = i; for (const g of Object.values(G)) g.write(); dirty = true; renderUI(); }
+const ray = new THREE.Raycaster();
+const PICK = { R: 'stream', Q: 'question', K: 'label (key)', V: 'content (value)', F: 'detectors\' answer', NW: 'weight', NP: 'number × weight', NS: 'sum' };
+function pick(e) {
+  const tip = $('#tip');
+  if (!tr) return;
+  const r = canvas.getBoundingClientRect();
+  ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+  let best = null;
+  for (const [name, g] of Object.entries(G)) {
+    if (name === 'EB') continue;
+    for (const hit of ray.intersectObject(g.mesh)) {
+      if (g.cur.s[hit.instanceId * 3] < 0.2) continue;
+      if (!best || hit.distance < best.d) best = { name, g, i: hit.instanceId, d: hit.distance };
+      break;
+    }
+  }
+  if (!best) { tip.hidden = true; setSel(-1); return; }
+  const { name, g, i } = best, T = tr.T, l = layer, t = tok;
+  if (g.linked) setSel(selIdx === i ? -1 : i);          // tap toggles tracking of this position
+  let txt;
+  if (name === 'B') {
+    const o = (l * T + t) * 48 + i;
+    txt = `block ${i}: ${fmtPct(tr.a.bshare[o] / 255)} of the detectors' output · ${tr.a.bdock[o] ? 'docked' : 'not docked'} · ${tr.a.bunits[o]}/32 of its detectors in the single-detector set`;
+  } else if (name === 'TK') {
+    let w = '';
+    if (i <= t) w = ' · attention from each question block: ' + Array.from({ length: 9 }, (_, h) => (tr.a.att[((l * 9 + h) * T + t) * T + i] / 255).toFixed(2)).join(' ');
+    txt = `token ${i} “${showTok(tr.h.tokens[i])}”${i > t ? ' (later: not visible to this token)' : w}`;
+  } else if (name === 'Q' && STEPS[step].key !== 'concat' && STEPS[step].key !== 'add') {
+    txt = `${PICK.Q} block ${Math.floor(i / 64)}, number ${i % 64} = ${f3(g.vals[i])}`;
+  } else if (name === 'K' || name === 'V') {
+    const gi = Math.floor(i / 64);
+    txt = `${PICK[name]} block ${gi} (shared by question blocks ${gi * 3}–${gi * 3 + 2}), number ${i % 64} = ${f3(g.vals[i])}`;
+  } else txt = `${PICK[name] || 'value'} #${i} = ${f3(g.vals[i])}`;
+  tip.textContent = txt; tip.hidden = false;
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - 270) + 'px'; tip.style.top = Math.max(e.clientY - 40, 8) + 'px';
+}
+
+function resize() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true;
+}
+addEventListener('resize', resize);
+const v3 = new THREE.Vector3();
+function frame(now) {
+  for (const g of Object.values(G)) if (g.step(now)) dirty = true;
+  const k = Math.min(1, (now - camT0) / 700), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  if (k < 1) dirty = true;
+  camCur = camFrom.map((a, j) => a + (camTo[j] - a) * e);
+  const lk = Math.min(1, (now - lineFade.t0) / 500);
+  lineMat.opacity = lineFade.from + (lineFade.to - lineFade.from) * lk; if (lk < 1) dirty = true;
+  if (dirty) {
+    const panelH = $('#panel').offsetHeight, topH = $('#top').offsetHeight, H = canvas.clientHeight, visH = Math.max(H - panelH - topH, 120);
+    const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
+    const dist = Math.max(camCur[1] / 2 / Math.tan(hf), (camCur[3] / 2 / Math.tan(vf)) * (H / visH)) * zoom;
+    lastDist = dist;
+    // shift the target so the scene sits in the space between the top bar and the panel; pan is the viewer's own offset
+    const yShift = -(((panelH - topH) / 2) / H) * 2 * Math.tan(vf) * dist;
+    const tx = camCur[0] + pan.x, ty = camCur[2] + yShift + pan.y, tz = pan.z;
+    camera.position.set(tx + dist * Math.sin(theta) * Math.cos(phi), ty + dist * Math.sin(phi), tz + dist * Math.cos(theta) * Math.cos(phi));
+    camera.lookAt(tx, ty, tz);
+    camera.updateMatrixWorld();
+    renderer.render(scene, camera);
+    drawNumbers(H, panelH, topH, vf);
+    const Wd = canvas.clientWidth, key = tr ? STEPS[step].key : '';
+    for (const L of LABELS) {
+      const on = tr && L.keys.includes(key) && !(L.minPh && L.minPh[key] > phase) && !(L.maxPh && L.maxPh[key] < phase) && !overview;
+      if (!on) { L.el.style.display = 'none'; continue; }
+      const p = L.p();
+      v3.set(p[0], p[1], p[2]).project(camera);
+      if (v3.z > 1) { L.el.style.display = 'none'; continue; }
+      if (L.text) L.el.textContent = L.text();
+      L.el.style.display = ''; L.el.style.left = ((v3.x + 1) / 2) * Wd + 'px'; L.el.style.top = ((1 - v3.y) / 2) * H + 'px';
+    }
+    dirty = false;
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- numbers on the cubes: a 2D layer over the scene, only for cubes large enough to read ----------
+const numCv = $('#num'), nctx = numCv.getContext('2d'), wp = new THREE.Vector3();
+let numbersOn = true, lastFont = '';
+const fmtV = v => { const a = Math.abs(v); return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2); };
+function drawNumbers(H, panelH, topH, vf) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), Wd = canvas.clientWidth;
+  if (numCv.width !== Math.round(Wd * dpr) || numCv.height !== Math.round(H * dpr)) { numCv.width = Math.round(Wd * dpr); numCv.height = Math.round(H * dpr); lastFont = ''; }
+  nctx.setTransform(dpr, 0, 0, dpr, 0, 0); nctx.clearRect(0, 0, Wd, H);
+  if (!numbersOn || !tr) return;
+  nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
+  const k = H / (2 * Math.tan(vf)), limitY = H - panelH;
+  for (const [g, unit] of [[G.R, ''], [G.Q, ''], [G.K, ''], [G.V, ''], [G.F, ''], [G.B, '%'], [G.NW, ''], [G.NP, ''], [G.NS, '']]) {
+    const P = g.cur.p, S = g.cur.s, Cc = g.cur.c;
+    for (let i = 0; i < g.n; i++) {
+      const j = i * 3;
+      if (S[j] < 0.6) continue;
+      wp.set(P[j], P[j + 1], P[j + 2] + (S[j + 2] * g.size) / 2 + 0.01);      // centre of the front face
+      const px = (g.size * S[j] * k) / wp.distanceTo(camera.position);       // cube width on screen
+      if (px < 24) continue;
+      v3.copy(wp).project(camera);
+      if (v3.z > 1 || Math.abs(v3.x) > 1.05 || Math.abs(v3.y) > 1.05) continue;
+      const x = ((v3.x + 1) / 2) * Wd, y = ((1 - v3.y) / 2) * H;
+      if (y > limitY || y < topH) continue;                                   // keep clear of the top bar and the panel
+      const txt = fmtV(g.vals[i]) + unit;
+      const fs = Math.min((px * 0.9) / Math.max(txt.length * 0.6, 2.4), px * 0.42);
+      if (fs < 7) continue;
+      const font = `${fs.toFixed(0)}px "JetBrains Mono", ui-monospace, monospace`;
+      if (font !== lastFont) { nctx.font = font; lastFont = font; }
+      nctx.fillStyle = 0.299 * Cc[j] + 0.587 * Cc[j + 1] + 0.114 * Cc[j + 2] > 0.45 ? '#111418' : '#f2f4f7';
+      nctx.globalAlpha = selIdx >= 0 && !(g.linked && i === selIdx) ? 0.3 : 1;   // tracking dims the other numbers
+      nctx.fillText(txt, x, y);
+    }
+  }
+  nctx.globalAlpha = 1;
+  // The tracked position: a label above its cube in every linked group, readable at any zoom.
+  if (selIdx >= 0) for (const g of [G.R, G.Q, G.F, G.NW, G.NP]) {
+    const j = selIdx * 3;
+    if (g.cur.s[j] < 0.3) continue;
+    wp.set(g.cur.p[j], g.cur.p[j + 1] + g.size * 0.9, g.cur.p[j + 2] + (g.cur.s[j + 2] * g.size) * 0.75);
+    v3.copy(wp).project(camera);
+    if (v3.z > 1 || Math.abs(v3.x) > 1.05 || Math.abs(v3.y) > 1.05) continue;
+    const x = ((v3.x + 1) / 2) * Wd, y = ((1 - v3.y) / 2) * H;
+    if (y > limitY || y < topH) continue;
+    const txt = f3(g.vals[selIdx]);
+    nctx.font = '600 12px "JetBrains Mono", ui-monospace, monospace'; lastFont = '';
+    const w = nctx.measureText(txt).width + 12;
+    nctx.fillStyle = 'rgba(42, 34, 48, 0.94)'; nctx.strokeStyle = '#ec5c9e'; nctx.lineWidth = 1;
+    nctx.beginPath(); nctx.roundRect(x - w / 2, y - 20, w, 18, 4); nctx.fill(); nctx.stroke();
+    nctx.fillStyle = '#ffffff'; nctx.fillText(txt, x, y - 11);
+  }
+}
+$('#numbers').onclick = () => { numbersOn = !numbersOn; $('#numbers').setAttribute('aria-pressed', numbersOn); dirty = true; };
+
+// Compact panel: phones start with tokens, controls, a one-line title and the plain explanation.
+function setCompact(on) {
+  $('#panel').classList.toggle('compact', on);
+  $('#detail').setAttribute('aria-expanded', !on); $('#detail').textContent = on ? 'Details' : 'Less';
+  dirty = true;
+}
+$('#detail').onclick = () => setCompact(!$('#panel').classList.contains('compact'));
+setCompact(matchMedia('(max-width: 640px)').matches);
+resize(); requestAnimationFrame(frame); init();
+})();
+</script>
