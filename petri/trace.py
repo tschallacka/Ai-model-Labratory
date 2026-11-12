@@ -29,6 +29,12 @@ from profile_ffn import BLOB, BLOCK, FRAC, RES, docking  # noqa: E402
 FINAL_BLOCKS = f'{RES}/blocks.json'
 PROVISIONAL_BLOCKS = os.path.join(HERE, 'blocks_provisional.json')
 TOKENIZER = 'sources/hf/SmolLM2-135M-Instruct-tokenizer.json'
+# viewer.html follows the artifact page contract (no html/head/body of its own); the artifact host wraps it at
+# publish time. The live server and the standalone static build (any ordinary web host) wrap it the same way,
+# so phones get the viewport tag and browsers leave quirks mode.
+SKELETON = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
+            '<style>body{margin:0}[hidden]{display:none!important}</style></head><body>%BODY%</body></html>')
 
 
 def load_blocks():

@@ -13,17 +13,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace import HERE, Tracer  # noqa: E402  (petri/trace.py, not the stdlib module: HERE comes first)
+from trace import HERE, SKELETON, Tracer  # noqa: E402  (petri/trace.py, not the stdlib module: HERE comes first)
 
 PROMPTS = json.load(open(os.path.join(HERE, 'prompts.json')))['prompts']
 tracer = Tracer()
 lock = threading.Lock()
 cache = {}
-# viewer.html follows the artifact page contract (no html/head/body of its own); the artifact host
-# wraps it at publish time, so the live server wraps it the same way.
-SKELETON = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">'
-            '<style>body{margin:0}[hidden]{display:none!important}</style></head><body>%BODY%</body></html>')
 
 def sample_trace(name):
     if name not in cache:

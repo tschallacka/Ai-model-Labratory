@@ -3,7 +3,8 @@
   env/result/bin/python3 petri/build_static.py
 
 The page is viewer.html with the sample list injected; it fetches traces/<name>.b64.txt relative to itself,
-so a phone only downloads the sample it opens. Publish index.html with traces/*.b64.txt as supporting files.
+so a phone only downloads the sample it opens. Host petri/static/ as-is on any web server (index.html is a
+complete document); for a claude.ai artifact publish artifact.html with traces/*.b64.txt as supporting files.
 """
 import base64
 import json
@@ -11,7 +12,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from trace import HERE, Tracer  # noqa: E402  (petri/trace.py)
+from trace import HERE, SKELETON, Tracer  # noqa: E402  (petri/trace.py)
 
 OUT = os.path.join(HERE, 'static')
 
@@ -37,8 +38,12 @@ def main():
     marker = '<!--PETRI_STATIC-->'
     if marker not in page:
         raise SystemExit(f'viewer.html has no {marker} marker')
-    open(os.path.join(OUT, 'index.html'), 'w').write(page.replace(marker, inject, 1))
-    print('wrote', os.path.join(OUT, 'index.html'), f'(blocks: {t.blocks_meta["kind"]})')
+    body = page.replace(marker, inject, 1)
+    # index.html: a complete document for any ordinary web host. artifact.html: the bare page, for the
+    # claude.ai artifact host, which adds that same skeleton itself at publish time.
+    open(os.path.join(OUT, 'index.html'), 'w').write(SKELETON.replace('%BODY%', body))
+    open(os.path.join(OUT, 'artifact.html'), 'w').write(body)
+    print('wrote', os.path.join(OUT, 'index.html'), 'and artifact.html', f'(blocks: {t.blocks_meta["kind"]})')
 
 
 if __name__ == '__main__':

@@ -23,8 +23,10 @@ It listens on 127.0.0.1 only and computes each trace on the GPU (MPS) in well un
 env/result/bin/python3 petri/build_static.py   # writes petri/static/
 ```
 
-`petri/static/index.html` plus `traces/*.b64.txt` is a self-contained page with five fixed sample prompts.
-Traces ship as base64 text because the host it was built for serves no binary file types.
+`petri/static/` is a self-contained site with five fixed sample prompts: host the folder as-is on any web
+server (`index.html` is a complete document). `artifact.html` is the same page without the document
+skeleton, for a claude.ai artifact, whose host adds it. Traces ship as base64 text because that host
+serves no binary file types.
 
 ## Files
 
