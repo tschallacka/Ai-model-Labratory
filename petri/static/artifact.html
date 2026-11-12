@@ -257,8 +257,9 @@ const G = {
   TK: new Group(96, 1), B: new Group(48, 1), F: new Group(576, 0.8),
   EB: new Group(48, 1),                                            // embedding table, drawn as 48 slabs
   NW: new Group(576, 0.8), NP: new Group(576, 0.8), NS: new Group(2, 0.8),   // inside-a-head demo
+  GN: new Group(576, 0.8),                                         // the evening-out multipliers (RMSNorm gain)
 };
-for (const [k, g] of Object.entries(G)) { g.name = k; g.linked = ['R', 'Q', 'F', 'NW', 'NP'].includes(k); g.write(); }
+for (const [k, g] of Object.entries(G)) { g.name = k; g.linked = ['R', 'Q', 'F', 'GN', 'NW', 'NP'].includes(k); g.write(); }
 
 // Curved lines (attention arcs, docking links, projection beams) with per-vertex alpha.
 const MAXV = 40000;
@@ -344,9 +345,10 @@ function flowsFor(s, ph) {
   switch (key) {
     case 'embed': return ph === 0 ? [] : [[[EX + 17, slabY(tokSlab()), Z], [-17, 0, Z]]];
     case 'in': return [[[-28, 0, Z], [-17, 0, Z]]];
-    case 'head': return ph === 3 ? [[[-18, 0, Z], [-18, PY + 4, Z]], [[18, WY, Z], [18, PY + 4, Z]]]
-      : ph === 4 ? [[[0, PY - 9.5, Z], [0, SY + 2.6, Z]]]
-      : ph === 6 ? [[[-1.2, SY + 2, Z], (() => { const c = headCell(demoHead, 2 * (W ? W.a.pair[(layer * 9 + demoHead) * 4 + demoPair] : 0)); return [c[0], c[1] - 1, Z]; })()]] : [];
+    case 'head': return ph === 3 ? [[[18, WY + 6, Z], [18, -6, Z]]]                     // multipliers act on the stream
+      : ph === 5 ? [[[-18, 0, Z], [-18, PY + 4, Z]], [[18, WY, Z], [18, PY + 4, Z]]]
+      : ph === 6 ? [[[0, PY - 9.5, Z], [0, SY + 2.6, Z]]]
+      : ph === 8 ? [[[-1.2, SY + 2, Z], (() => { const c = headCell(demoHead, 2 * (W ? W.a.pair[(layer * 9 + demoHead) * 4 + demoPair] : 0)); return [c[0], c[1] - 1, Z]; })()]] : [];
     case 'qkv': return [toHeads];
     case 'attend': case 'headsout': return [fromTokens];
     case 'concat': return ph === 0 ? [toConcat] : [];
@@ -364,10 +366,10 @@ const STEPS = [
     plain: 'This is the token\'s "stream": 576 numbers that together describe it. Every layer reads the stream and adds a small correction to it. Orange cubes are positive numbers, blue ones negative, and brighter means bigger.',
     tech: 'Residual stream entering the layer. Colour is relative to the 98th percentile of |value| in this vector; a few outlier dimensions saturate.',
     cam: () => [0, 42, 0, 26] },
-  { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 7, gap: 1800,
-    plain: 'How one number of a head is made. The stream is shown as bars from a flat base: orange (positive) bars stick out toward you, blue (negative) bars go back into the screen, and longer means bigger. First it is evened out: every bar is scaled by the same amount, like a volume knob, so the row has a standard loudness, and each position then gets its own small fixed boost or damping. Then each of the 576 numbers is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
-    tech: 'RMSNorm x / √(mean(x²) + ε) × g, with g the learned per-dimension gain. One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). The pair buttons pick pair p = 0, 4 or 8 (57°, 14°, 3.2° per token) or the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
-    cam: ph => [[0, 40, 0, 30], [0, 40, 0, 30], [0, 44, -11, 50], [0, 44, -22, 74], [0, 44, -29, 78], [8, 40, SY, 30], [BX / 2, 84, -18, 90]][ph] },
+  { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 9, gap: 1800,
+    plain: 'How one number of a head is made. The stream is shown as bars from a flat base: orange (positive) bars stick out toward you, blue (negative) bars go back into the screen, and longer means bigger. First a volume knob: every number is scaled by the same amount so the row has a standard loudness; the shape does not change. Then each of the 576 positions is multiplied by its own learned multiplier: most are small, a few are large, and some are negative, which flips the sign. This is where new spikes appear and loud numbers get muted. Then each number is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
+    tech: 'RMSNorm x / √(mean(x²) + ε) × g: the volume knob is 1/√(mean(x²) + ε); g is the learned per-dimension gain (signed). One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). The pair buttons pick pair p = 0, 4 or 8 (57°, 14°, 3.2° per token) or the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
+    cam: ph => [[0, 40, 0, 30], [0, 40, 0, 30], [0, 44, -11, 50], [0, 44, -11, 50], [0, 44, -11, 50], [0, 44, -22, 74], [0, 44, -29, 78], [8, 40, SY, 30], [BX / 2, 84, -18, 90]][ph] },
   { key: 'qkv', short: 'q k v', t: 'All the heads', phases: 1,
     plain: 'That same recipe runs for every number, each with its own weights. The result: 9 "question" blocks (what is this token looking for?), plus 3 "label" blocks and 3 "content" blocks that every token offers to the others. Each label and content block is shared by the 3 question blocks in its row.',
     tech: 'RMSNorm, then W_q, W_k, W_v. The query becomes 9 heads of 64; keys and values have 3 heads each, shared by 3 query heads (grouped-query attention). Each value mixes all 576 inputs, so these cubes appear rather than move.',
@@ -405,12 +407,14 @@ const LABELS = [
   { t: '', p: () => [EX + 18, slabY(tokSlab()) + 0.6, 0], keys: ['embed'], hot: true, text: () => `“${showTok(tr.h.tokens[tok])}” = ID ${tr.h.ids[tok]}` },
   { t: 'the stream · 576 numbers', p: () => [0, 10.5, 0], keys: ['embed', 'in', 'qkv', 'attend', 'headsout', 'concat'], minPh: { embed: 1 } },
   { t: 'the stream as it arrives · orange sticks out, blue goes back', p: () => [0, 10.5, 0], keys: ['head'], maxPh: { head: 0 } },
-  { t: '', p: () => [0, 10.5, 0], keys: ['head'], minPh: { head: 1 }, text: () => (W && tr ? `evened out: every bar × ${headDemo(layer, tok, demoHead).factor.toFixed(2)}, then its own boost` : 'evened out') },
-  { t: 'one row of 576 weights', p: () => [0, WY + 10.5, 0], keys: ['head'], minPh: { head: 2 } },
-  { t: 'each number × its weight', p: () => [0, PY + 10.5, 0], keys: ['head'], minPh: { head: 3 }, maxPh: { head: 3 } },
-  { t: 'added up: one number, and its partner', p: () => [0, SY + 2, 0], keys: ['head'], minPh: { head: 4 }, maxPh: { head: 4 } },
-  { t: 'the pair as an arrow · grey before, pink after the turn', p: () => [DIALX, SY + DIALR + 2.5, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, hot: true },
-  { t: '', p: () => { const [cx, cy] = slabC(demoHead); return [cx, cy + 5, 0]; }, keys: ['head'], minPh: { head: 6 }, hot: true, text: () => `lands in question block ${demoHead}` },
+  { t: '', p: () => [0, 10.5, 0], keys: ['head'], minPh: { head: 1 }, maxPh: { head: 2 }, text: () => (W && tr ? `volume knob: every number × ${headDemo(layer, tok, demoHead).factor.toFixed(2)} · same shape` : 'volume knob') },
+  { t: 'the 576 learned multipliers · blue ones flip the sign', p: () => [0, WY + 10.5, 0], keys: ['head'], minPh: { head: 2 }, maxPh: { head: 3 }, hot: true },
+  { t: 'after the multipliers: new spikes, some colours flipped', p: () => [0, 10.5, 0], keys: ['head'], minPh: { head: 3 } },
+  { t: 'one row of 576 weights', p: () => [0, WY + 10.5, 0], keys: ['head'], minPh: { head: 4 } },
+  { t: 'each number × its weight', p: () => [0, PY + 10.5, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 } },
+  { t: 'added up: one number, and its partner', p: () => [0, SY + 2, 0], keys: ['head'], minPh: { head: 6 }, maxPh: { head: 6 } },
+  { t: 'the pair as an arrow · grey before, pink after the turn', p: () => [DIALX, SY + DIALR + 2.5, 0], keys: ['head'], minPh: { head: 7 }, maxPh: { head: 7 }, hot: true },
+  { t: '', p: () => { const [cx, cy] = slabC(demoHead); return [cx, cy + 5, 0]; }, keys: ['head'], minPh: { head: 8 }, hot: true, text: () => `lands in question block ${demoHead}` },
   { t: 'the stream', p: () => [DX, 10.5, 0], keys: ['add', 'dock'] },
   { t: 'the stream', p: () => [GX, 10.5, 0], keys: ['down'] },
   { t: 'questions · 9 heads × 64', p: () => [BX, 15.5, 0], keys: ['qkv', 'attend', 'headsout'] },
@@ -437,7 +441,7 @@ function headDemo(l, t, h) {
   for (let i = 0; i < 576; i++) { a += pa[i]; b += n[i] * wb[i]; if (Math.abs(pa[i]) > Math.abs(pa[imax])) imax = i; }
   const ang = t * Math.pow(m.rope_base, (-2 * p) / m.HD), c = Math.cos(ang), s = Math.sin(ang);
   const rec = deq('q', l, t, 64, h, 9);
-  return { x, factor, n, p, wa, pa, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
+  return { x, factor, xf: x.map(v => v * factor), g, n, p, wa, pa, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
 }
 
 // The turn as a dial: the pair (first number, partner) is an arrow from the centre. Grey = before, pink = after,
@@ -480,11 +484,11 @@ function buildState(s, ph) {
   if (key === 'add') { rx = DX; rz = ph === 0 ? -1.5 : 0; rraw = ph === 0 ? rin : mid; }
   if (key === 'dock') { rx = DX; rraw = mid; }
   if (key === 'down') { rx = ph === 0 ? DX : GX; rraw = ph === 0 ? mid : rout; }
-  if (demo) rraw = ph === 0 ? demo.x : demo.n;
+  if (demo) rraw = ph === 0 ? demo.x : ph <= 2 ? demo.xf : demo.n;
   const rv = scaled(rraw);
-  // In the head step the stream is drawn as bars (depth = size) on one shared scale, the evened-out one,
-  // so evening out visibly shrinks or grows every bar.
-  const barS = demo ? robust(demo.n) || 1 : 1;
+  // In the head step the stream is drawn as bars (depth = size). Bar lengths are relative within the row,
+  // so the volume knob visibly keeps the shape and the multipliers visibly change it.
+  const barS = demo ? robust(rraw) || 1 : 1;
   for (let i = 0; i < 576; i++) {
     if (key === 'embed' && ph === 0) G.R.set(i, [EX + (i % 32) - 15.5, slabY(tokSlab()), 0.9], 0.3, valColor(rv[i]));
     else if (demo) {
@@ -496,25 +500,29 @@ function buildState(s, ph) {
   G.R.vals.set(rraw);
   // embedding table
   for (let k = 0; k < 48; k++) G.EB.set(k, [EX, slabY(k), 0], key === 'embed' ? [32, 0.5, 1.2] : 0, k === tokSlab() ? DOCK : SLAB);
-  // inside a head: weights row, products, the summed pair, the turn, the landing
+  // inside a head: the multipliers row, weights row, products, the summed pair, the turn, the landing
+  // parts: 0 arrives · 1 volume knob · 2 multipliers · 3 multiplied · 4 weights · 5 multiply · 6 add up · 7 turn · 8 land
   if (demo) {
-    const wv = scaled(demo.wa), pv = scaled(demo.pa);
+    const wv = scaled(demo.wa), pv = scaled(demo.pa), gS = robust(demo.g) || 1;
     for (let i = 0; i < 576; i++) {
-      G.NW.set(i, gridPos(i, 0, WY), ph >= 2 ? 1 : 0, valColor(wv[i]));
-      if (ph <= 3) G.NP.set(i, gridPos(i, 0, PY), ph === 3 ? 1 : 0, valColor(pv[i]));
+      // the multipliers as bars, same convention as the stream: positive out, negative back
+      const gd = 0.25 + Math.min(10, (Math.abs(demo.g[i]) / gS) * 1.6), [gx, gy] = gridPos(i, 0, WY);
+      G.GN.set(i, [gx, gy, (demo.g[i] < 0 ? -1 : 1) * gd * 0.4], ph === 2 || ph === 3 ? [1, 1, gd] : 0, valColor(demo.g[i] / gS));
+      G.NW.set(i, gridPos(i, 0, WY), ph >= 4 ? 1 : 0, valColor(wv[i]));
+      if (ph <= 5) G.NP.set(i, gridPos(i, 0, PY), ph === 5 ? 1 : 0, valColor(pv[i]));
       else G.NP.set(i, [-1.2, SY, 0], 0, null);                   // all products fly into the sum
     }
-    G.NW.vals.set(demo.wa); G.NP.vals.set(demo.pa);
+    G.GN.vals.set(demo.g); G.NW.vals.set(demo.wa); G.NP.vals.set(demo.pa);
     const sumScale = Math.max(Math.abs(demo.a), Math.abs(demo.b), Math.abs(demo.qa), Math.abs(demo.qb)) || 1;
-    if (ph === 4 || ph === 5) {
-      const [va, vb] = ph === 4 ? [demo.a, demo.b] : [demo.qa, demo.qb];
+    if (ph === 6 || ph === 7) {
+      const [va, vb] = ph === 6 ? [demo.a, demo.b] : [demo.qa, demo.qb];
       G.NS.set(0, [-1.2, SY, 0], 1.8, valColor(va / sumScale)); G.NS.set(1, [1.2, SY, 0], 1.8, valColor(vb / sumScale));
       G.NS.vals[0] = va; G.NS.vals[1] = vb;
-    } else if (ph === 6) {
+    } else if (ph === 8) {
       G.NS.set(0, headCell(demoHead, 2 * demo.p), 1.15, valColor(demo.qa / sumScale)); G.NS.set(1, headCell(demoHead, 2 * demo.p + 1), 1.15, valColor(demo.qb / sumScale));
       G.NS.vals[0] = demo.qa; G.NS.vals[1] = demo.qb;
     } else { G.NS.set(0, [-1.2, SY, 0], 0, null); G.NS.set(1, [1.2, SY, 0], 0, null); }
-    if (ph === 5) segs.push(...dialSegs(demo));
+    if (ph === 7) segs.push(...dialSegs(demo));
   }
   // question heads: in place for qkv/attend/headsout, flying to the concat plane, merging into the stream
   const adn = scaled(ad);
@@ -524,7 +532,7 @@ function buildState(s, ph) {
     else if (key === 'headsout') G.Q.set(k, headCell(h, i), 1, valColor(hon[k]));
     else if (key === 'concat') G.Q.set(k, residPos(k, DX, 0), 1, valColor(ph === 0 ? hon[k] : adn[k]));
     else if (key === 'add') G.Q.set(k, residPos(k, DX, ph === 0 ? 1.5 : 0), ph === 0 ? 1 : 0, valColor(adn[k]));
-    else if (demo && ph === 6 && h === demoHead) G.Q.set(k, headCell(h, i), 0.35, SLAB);     // the slot the pair lands in
+    else if (demo && ph === 8 && h === demoHead) G.Q.set(k, headCell(h, i), 0.35, SLAB);     // the slot the pair lands in
     else G.Q.set(k, ['concat', 'add', 'dock', 'down'].includes(key) ? residPos(k, DX, 0) : headCell(h, i), 0, null);
   }
   G.Q.vals.set(key === 'qkv' || key === 'attend' ? qRaw : key === 'headsout' || (key === 'concat' && ph === 0) ? hoRaw : ad);
@@ -592,7 +600,7 @@ function apply(s, ph, dur) {
 // Show one part (phase) of a step. Parts never advance on their own: ▶ or Play moves on.
 const PARTS = {
   embed: ['the lookup', 'into the stream'],
-  head: ['as it arrives', 'evened out', 'the weights', 'multiply', 'add up', 'turn', 'land'],
+  head: ['as it arrives', 'volume knob', 'the multipliers', 'multiplied', 'the weights', 'multiply', 'add up', 'turn', 'land'],
   concat: ['side by side', 'mixed'],
   add: ['the update arrives', 'added'],
   down: ['the detectors\' answer', 'added'],
@@ -630,7 +638,11 @@ function renderUI() {
       const turns = Math.floor(d.ang / (2 * Math.PI)), deg = ((d.ang % (2 * Math.PI)) * 180) / Math.PI;
       st = [
         `the stream as it arrives · biggest bar: ${f3(d.x.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0))}`,
-        `evening out: every number × ${d.factor.toFixed(3)} (1 ÷ the typical size of the row), then × its own fixed boost (0.0 to ${f3(Math.max(...Array.from(wrow('an', l, 576), Math.abs)))})`,
+        `volume knob: every number × ${d.factor.toFixed(3)} (1 ÷ the typical size of the row) · the shape does not change`,
+        (() => { const gm = Array.from(d.g, Math.abs).sort((a, b) => a - b)[288], neg = d.g.filter(v => v < 0).length, big = d.g.filter(v => Math.abs(v) > 10 * gm).length;
+          return `the 576 learned multipliers: from ${f3(Math.min(...d.g))} to ${f3(Math.max(...d.g))}, middle size ${gm.toFixed(3)} · ${neg} are negative (they flip the sign) · ${big} are over 10× the middle size`; })(),
+        (() => { const top = Array.from(d.n.keys()).sort((a, b) => Math.abs(d.n[b]) - Math.abs(d.n[a]))[0], rank = Array.from(d.x.keys()).sort((a, b) => Math.abs(d.x[b]) - Math.abs(d.x[a])).indexOf(top) + 1;
+          return `after the multipliers the biggest is #${top}: ${f3(d.xf[top])} × ${f3(d.g[top])} = <b>${f3(d.n[top])}</b> · on arrival it was only the ${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'} biggest`; })(),
         `question block ${demoHead}, numbers ${2 * d.p} and ${2 * d.p + 1} of its 64 · one weight for each of the 576 stream numbers`,
         `576 multiplications · the biggest: #${d.imax}: ${f3(d.n[d.imax])} × ${f3(d.wa[d.imax])} = ${f3(d.pa[d.imax])}`,
         `all 576 added up = <b>${f3(d.a)}</b> · its partner, same recipe with the next weight row = <b>${f3(d.b)}</b>`,
@@ -669,7 +681,7 @@ function renderUI() {
     let line;
     if (key === 'head' && W) {
       const d = headDemo(l, t, demoHead);
-      line = `position #${k}: arrives as ${f3(d.x[k])} → evened out ${f3(d.n[k])} → × weight ${f3(d.wa[k])} = ${f3(d.pa[k])}, one of the 576 parts of the sum`;
+      line = `position #${k}: arrives as ${f3(d.x[k])} → volume knob ${f3(d.xf[k])} → × its multiplier ${f3(d.g[k])} = ${f3(d.n[k])} → × weight ${f3(d.wa[k])} = ${f3(d.pa[k])}, one of the 576 parts of the sum`;
     } else if (['qkv', 'attend', 'headsout'].includes(key)) {
       line = `question block ${Math.floor(k / 64)}, number ${k % 64}: question ${f3(deq('q', l, t, 64, Math.floor(k / 64), 9)[k % 64])} → what it found ${f3(deq('ho', l, t, 64, Math.floor(k / 64), 9)[k % 64])} · after "concat" it sits at stream position #${k}`;
     } else {
@@ -817,13 +829,13 @@ canvas.addEventListener('pointermove', e => {
   dirty = true;
 });
 const endPtr = e => {
-  if (pts.size === 1 && moved < 6) {
+  if (pts.size === 1 && moved < (e.pointerType === 'mouse' ? 6 : 14)) {   // a fingertip wobbles more than a mouse
     const now = performance.now();
     if (now - lastTap < 320) { resetView(); $('#tip').hidden = true; lastTap = 0; } else { pick(e); lastTap = now; }
   }
   pts.delete(e.pointerId);
   if (pts.size < 2) cent0 = null;
-  moved = Math.max(moved, 6);   // the finger left after a pinch must not count as a tap
+  moved = Math.max(moved, 100);   // the finger left after a pinch must not count as a tap
 };
 canvas.addEventListener('pointerup', endPtr);
 canvas.addEventListener('pointercancel', e => { pts.delete(e.pointerId); if (pts.size < 2) cent0 = null; });
@@ -831,7 +843,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.04
 
 function setSel(i) { selIdx = i; for (const g of Object.values(G)) g.write(); dirty = true; renderUI(); }
 const ray = new THREE.Raycaster();
-const PICK = { R: 'stream', Q: 'question', K: 'label (key)', V: 'content (value)', F: 'detectors\' answer', NW: 'weight', NP: 'number × weight', NS: 'sum' };
+const PICK = { R: 'stream', Q: 'question', K: 'label (key)', V: 'content (value)', F: 'detectors\' answer', GN: 'multiplier', NW: 'weight', NP: 'number × weight', NS: 'sum' };
 function pick(e) {
   const tip = $('#tip');
   if (!tr) return;
@@ -844,6 +856,23 @@ function pick(e) {
       if (g.cur.s[hit.instanceId * 3] < 0.2) continue;
       if (!best || hit.distance < best.d) best = { name, g, i: hit.instanceId, d: hit.distance };
       break;
+    }
+  }
+  if (!best) {
+    // Fingertips are wider than the cubes at normal zoom: take the visible cube whose centre is nearest the
+    // tap, within 20 px, when the ray hit nothing.
+    const px = e.clientX - r.left, py = e.clientY - r.top;
+    let bd = 20 * 20;
+    for (const [name, g] of Object.entries(G)) {
+      if (name === 'EB') continue;
+      for (let i = 0; i < g.n; i++) {
+        const j = i * 3;
+        if (g.cur.s[j] < 0.2) continue;
+        v3.set(g.cur.p[j], g.cur.p[j + 1], g.cur.p[j + 2]).project(camera);
+        if (v3.z > 1) continue;
+        const dx = ((v3.x + 1) / 2) * r.width - px, dy = ((1 - v3.y) / 2) * r.height - py, d2 = dx * dx + dy * dy;
+        if (d2 < bd) { bd = d2; best = { name, g, i, d: 0 }; }
+      }
     }
   }
   if (!best) { tip.hidden = true; setSel(-1); return; }
@@ -920,7 +949,7 @@ function drawNumbers(H, panelH, topH, vf) {
   if (!numbersOn || !tr) return;
   nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
   const k = H / (2 * Math.tan(vf)), limitY = H - panelH;
-  for (const [g, unit] of [[G.R, ''], [G.Q, ''], [G.K, ''], [G.V, ''], [G.F, ''], [G.B, '%'], [G.NW, ''], [G.NP, ''], [G.NS, '']]) {
+  for (const [g, unit] of [[G.R, ''], [G.Q, ''], [G.K, ''], [G.V, ''], [G.F, ''], [G.B, '%'], [G.GN, ''], [G.NW, ''], [G.NP, ''], [G.NS, '']]) {
     const P = g.cur.p, S = g.cur.s, Cc = g.cur.c;
     for (let i = 0; i < g.n; i++) {
       const j = i * 3;
@@ -944,7 +973,7 @@ function drawNumbers(H, panelH, topH, vf) {
   }
   nctx.globalAlpha = 1;
   // The tracked position: a label above its cube in every linked group, readable at any zoom.
-  if (selIdx >= 0) for (const g of [G.R, G.Q, G.F, G.NW, G.NP]) {
+  if (selIdx >= 0) for (const g of [G.R, G.Q, G.F, G.GN, G.NW, G.NP]) {
     const j = selIdx * 3;
     if (g.cur.s[j] < 0.3) continue;
     wp.set(g.cur.p[j], g.cur.p[j + 1] + g.size * 0.9, g.cur.p[j + 2] + (g.cur.s[j + 2] * g.size) * 0.75);
