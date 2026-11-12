@@ -180,13 +180,17 @@ class Tracer:
                 'frac': FRAC, 'vocab': len(tm.vocab), 'eps': float(tm.eps),
                 'rope_base': float(GGUF(BLOB).kv['llama.rope.freq_base'])}
 
+    # Rotation pairs offered in the viewer's dial: three fixed speeds plus the largest-norm pair of each head.
+    # Pair p turns 100000^(-2p/64) radians per token: p=0 57.3 deg, p=4 13.6 deg, p=8 3.2 deg.
+    DEMO_PAIRS = (0, 4, 8)
+
     def weights(self):
         """Weights for the viewer's 'inside a head' demo, shared by every trace.
 
-        Per layer: the attention RMS-norm weights (576), and per query head the two W_q rows of one
-        rotation pair, the pair whose rows have the largest norm. That is enough to redo two of the
-        64 values of every head by hand (rescale, 576 multiplies, sum, rotate) in the browser.
-        Stored as int16 with one float32 scale per row: 1/32767 resolution, about 0.6 MB.
+        Per layer: the attention RMS-norm weights (576), and per query head the two W_q rows of four
+        rotation pairs: pairs 0, 4 and 8 (fast, medium, slow turning) and the pair whose rows have the
+        largest norm. That is enough to redo those values of every head by hand (rescale, 576
+        multiplies, sum, rotate) in the browser. int16 with one float32 scale per row, about 2.5 MB.
         """
         tm, HD = self.tm, self.tm.HD
         an, rows, pairs = [], [], []
@@ -196,23 +200,23 @@ class Tracer:
             for h in range(tm.NH):
                 wq = W['q'][h * HD:(h + 1) * HD]                    # (64, 576), rows in rotation-pair order
                 norms = np.linalg.norm(wq.reshape(HD // 2, 2, -1), axis=(1, 2))
-                p = int(np.argmax(norms))
-                lp.append(p)
-                lr.append(wq[2 * p:2 * p + 2])
+                ps = list(self.DEMO_PAIRS) + [int(np.argmax(norms))]
+                lp.append(ps)
+                lr.append([wq[2 * p:2 * p + 2] for p in ps])
             rows.append(lr)
             pairs.append(lp)
-        an, rows = np.array(an, np.float32), np.array(rows, np.float32)    # (L, 576), (L, 9, 2, 576)
+        an, rows = np.array(an, np.float32), np.array(rows, np.float32)    # (L, 576), (L, 9, 4, 2, 576)
         arrays = {}
         for name, a in [('an', an), ('wq', rows)]:
             s = np.abs(a).max(-1) / 32767.0
             s[s == 0] = 1.0
             arrays[name] = np.round(a / s[..., None]).astype(np.int16)
             arrays[name + '_scale'] = s.astype(np.float32)
-        arrays['pair'] = np.array(pairs, np.uint8)
-        header = {'format': 1, 'kind': 'weights', 'model': self.model_meta(), 'sections': {},
-                  'what': 'attn_norm weights per layer; per query head the two W_q rows of the largest-norm rotation pair'}
+        arrays['pair'] = np.array(pairs, np.uint8)                     # (L, 9, 4)
+        header = {'format': 2, 'kind': 'weights', 'model': self.model_meta(), 'sections': {},
+                  'what': 'attn_norm weights per layer; per query head the two W_q rows of rotation pairs 0, 4, 8 '
+                          'and of the largest-norm pair'}
         return pack_arrays(arrays, header)
-
 
 if __name__ == '__main__':
     if sys.argv[1:] == ['provisional-blocks']:

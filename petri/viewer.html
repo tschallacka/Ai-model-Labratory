@@ -36,7 +36,7 @@ button { cursor: pointer; }
 button:hover { border-color: var(--muted); }
 button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 #custom { min-width: 0; flex: 1 1 220px; }
-#numbers[aria-pressed="true"] { border-color: var(--accent); }
+#numbers[aria-pressed="true"], #flow[aria-pressed="true"] { border-color: var(--accent); }
 #status { font: 12px var(--mono); color: var(--muted); }
 #status.err { color: var(--pos); }
 section#panel { position: absolute; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line);
@@ -102,6 +102,7 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
     <button id="run" class="live-only" hidden>Trace</button>
     <button id="overview" title="Show the whole layer">Whole layer</button>
     <button id="numbers" aria-pressed="true" title="Print values on cubes large enough to read; zoom in to see more">Numbers</button>
+    <button id="flow" aria-pressed="true" title="Arrows showing which way values move in this step">Flow</button>
     <span id="status">loading…</span>
   </header>
   <section id="panel">
@@ -299,7 +300,58 @@ const tokSlab = () => Math.min(47, Math.floor((tr.h.ids[tok] / tr.h.model.vocab)
 // ---------- steps ----------
 // plain: everyday explanation, shown by default. tech: the technical version, shown under Details.
 // cam(ph): [centre x, width to fit, centre y, height to fit]. phases: sub-steps played in order, gap ms apart.
-let tr = null, W = null, layer = 0, tok = 0, step = 1, phase = 0, gen = 0, demoHead = 0, busyUntil = 0;
+let tr = null, W = null, layer = 0, tok = 0, step = 1, phase = 0, gen = 0, demoHead = 0, demoPair = 0, busyUntil = 0;
+
+// ---------- flow arrows: which way values move in the current step, with a pulse running along each ----------
+let flowOn = true;
+const FLOW = new THREE.Color('#ffd76a'), UP = new THREE.Vector3(0, 1, 0), MAXF = 16;
+const flowMat = new THREE.MeshBasicMaterial({ color: FLOW, transparent: true, opacity: 0.85, depthWrite: false });
+const shafts = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.17, 0.17, 1, 8), flowMat, MAXF);
+const heads = new THREE.InstancedMesh(new THREE.ConeGeometry(0.8, 2.2, 14), flowMat, MAXF);
+const pulses = new THREE.InstancedMesh(new THREE.SphereGeometry(0.42, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }), MAXF);
+for (const m of [shafts, heads, pulses]) { m.count = 0; m.frustumCulled = false; scene.add(m); }
+let flows = [];
+function setFlows(list) {
+  flows = flowOn ? list.slice(0, MAXF).map(([a, b]) => ({ a: new THREE.Vector3(...a), b: new THREE.Vector3(...b) })) : [];
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+  flows.forEach((f, i) => {
+    const d = f.b.clone().sub(f.a), len = d.length(), dir = d.clone().normalize();
+    q.setFromUnitVectors(UP, dir);
+    const shaftLen = Math.max(0.1, len - 2.2);
+    m.compose(f.a.clone().addScaledVector(dir, shaftLen / 2), q, s.set(1, shaftLen, 1)); shafts.setMatrixAt(i, m);
+    m.compose(f.b.clone().addScaledVector(dir, -1.1), q, s.set(1, 1, 1)); heads.setMatrixAt(i, m);
+  });
+  shafts.count = heads.count = pulses.count = flows.length;
+  shafts.instanceMatrix.needsUpdate = heads.instanceMatrix.needsUpdate = true;
+}
+function updatePulses(now) {
+  if (!flows.length) return false;
+  const m = new THREE.Matrix4(), u = (now / 1600) % 1;
+  flows.forEach((f, i) => { m.makeTranslation(f.a.x + (f.b.x - f.a.x) * u, f.a.y + (f.b.y - f.a.y) * u, f.a.z + (f.b.z - f.a.z) * u); pulses.setMatrixAt(i, m); });
+  pulses.instanceMatrix.needsUpdate = true;
+  return true;
+}
+// Arrows float a little in front of everything (z = 3) so they are never hidden behind cubes.
+function flowsFor(s, ph) {
+  const Z = 3, key = STEPS[s].key;
+  const toHeads = [[16.5, 0, Z], [BX - 15, 0, Z]], fromTokens = [[CX - 1.6, 0, Z], [BX + 15, 0, Z]];
+  const toConcat = [[BX + 15, -14, Z], [DX - 17, -1, Z]], toDetectors = [[DX + 17, 0, Z], [FX - 17, 0, Z]];
+  const toOutput = [[FX + 17, 0, Z], [GX - 17, 0, Z]], toNext = [[GX + 17, 0, Z], [GX + 27, 0, Z]];
+  if (overview) return [toHeads, fromTokens, toConcat, toDetectors, toOutput, toNext];
+  switch (key) {
+    case 'embed': return ph === 0 ? [] : [[[EX + 17, slabY(tokSlab()), Z], [-17, 0, Z]]];
+    case 'in': return [[[-28, 0, Z], [-17, 0, Z]]];
+    case 'head': return ph === 3 ? [[[-18, 0, Z], [-18, PY + 4, Z]], [[18, WY, Z], [18, PY + 4, Z]]]
+      : ph === 4 ? [[[0, PY - 9.5, Z], [0, SY + 2.6, Z]]]
+      : ph === 6 ? [[[-1.2, SY + 2, Z], (() => { const c = headCell(demoHead, 2 * (W ? W.a.pair[(layer * 9 + demoHead) * 4 + demoPair] : 0)); return [c[0], c[1] - 1, Z]; })()]] : [];
+    case 'qkv': return [toHeads];
+    case 'attend': case 'headsout': return [fromTokens];
+    case 'concat': return ph === 0 ? [toConcat] : [];
+    case 'dock': return [toDetectors];
+    case 'down': return ph === 0 ? [toOutput] : [toNext];
+    default: return [];
+  }
+}
 const STEPS = [
   { key: 'embed', short: 'text→numbers', t: 'From text to numbers', phases: 2, gap: 1300,
     plain: 'Computers cannot read words, only numbers. The text is cut into pieces called tokens, and each token has an ID number. The model looks that number up in a big table and copies out its row: 576 numbers that are the token\'s starting description.',
@@ -375,8 +427,8 @@ function headDemo(l, t, h) {
   let ms = 0; for (const v of x) ms += v * v; ms /= 576;
   const factor = 1 / Math.sqrt(ms + m.eps), g = wrow('an', l, 576);
   const n = x.map((v, i) => v * factor * g[i]);
-  const p = W.a.pair[l * 9 + h];
-  const wa = wrow('wq', (l * 9 + h) * 2, 576), wb = wrow('wq', (l * 9 + h) * 2 + 1, 576);
+  const pi = (l * 9 + h) * 4 + demoPair, p = W.a.pair[pi];        // weights file: 4 pairs per head
+  const wa = wrow('wq', pi * 2, 576), wb = wrow('wq', pi * 2 + 1, 576);
   const pa = n.map((v, i) => v * wa[i]);
   let a = 0, b = 0, imax = 0;
   for (let i = 0; i < 576; i++) { a += pa[i]; b += n[i] * wb[i]; if (Math.abs(pa[i]) > Math.abs(pa[imax])) imax = i; }
@@ -526,6 +578,7 @@ function apply(s, ph, dur) {
   const segs = buildState(s, ph), now = performance.now();
   for (const g of Object.values(G)) g.begin(dur, now);
   setLines(segs);
+  setFlows(flowsFor(s, ph));
   if (dur === 0) lineFade.from = lineFade.to;
   if (s !== lastStepShown) { pan.set(0, 0, 0); lastStepShown = s; }   // a new step re-centres; a new token keeps the view
   camFrom = camCur.slice(); camTo = overview ? [(EX + GX) / 2, 300, 0, 26] : STEPS[s].cam(ph); camT0 = dur ? now : now - 1e6;
@@ -560,7 +613,8 @@ function renderUI() {
   $('#plain').textContent = S.plain;
   $('#tech').textContent = S.tech.replace('<id>', tr.h.ids[t]);
   $('#headPick').hidden = key !== 'head';
-  document.querySelectorAll('#headPick button').forEach((b, h) => b.classList.toggle('on', h === demoHead));
+  document.querySelectorAll('#headPick button.hb').forEach((b, h) => b.classList.toggle('on', h === demoHead));
+  document.querySelectorAll('#headPick button.pb').forEach((b, k) => b.classList.toggle('on', k === demoPair));
   let st = '';
   const i = l * T + t;
   if (key === 'embed') st = `token “${showTok(tr.h.tokens[t])}” → ID ${tr.h.ids[t]} → row ${tr.h.ids[t]} of ${tr.h.model.vocab.toLocaleString('en')} → 576 numbers`;
@@ -650,8 +704,17 @@ function buildAbout() {
 STEPS.forEach((S, i) => { const b = document.createElement('button'); b.textContent = S.short; b.onclick = () => { overview = false; stopPlay(); go(i); }; $('#steps').appendChild(b); });
 for (let h = 0; h < 9; h++) {
   if (h === 0) { const s = document.createElement('span'); s.textContent = 'question block:'; $('#headPick').appendChild(s); }
-  const b = document.createElement('button'); b.textContent = h; b.setAttribute('aria-label', `question block ${h}`);
+  const b = document.createElement('button'); b.className = 'hb'; b.textContent = h; b.setAttribute('aria-label', `question block ${h}`);
   b.onclick = () => { demoHead = h; stopPlay(); go(SI.head, false, STEPS[step].key === 'head' ? phase : 0); }; $('#headPick').appendChild(b);
+}
+// Which rotation pair the dial follows: three fixed speeds and the head's biggest-weights pair (petri/trace.py DEMO_PAIRS).
+{
+  const s = document.createElement('span'); s.textContent = 'pair:'; s.style.marginLeft = '8px'; $('#headPick').appendChild(s);
+  ['fast · 57°', '14°', '3.2°', 'biggest weights'].forEach((label, k) => {
+    const b = document.createElement('button'); b.className = 'pb'; b.textContent = label;
+    b.setAttribute('aria-label', `number pair: ${label}${k < 3 ? ' turn per token' : ''}`);
+    b.onclick = () => { demoPair = k; stopPlay(); go(SI.head, false, STEPS[step].key === 'head' ? phase : 0); }; $('#headPick').appendChild(b);
+  });
 }
 // ◀ / ▶ move one part at a time; a step's parts come before the next step.
 function stepBack() {
@@ -808,6 +871,7 @@ addEventListener('resize', resize);
 const v3 = new THREE.Vector3();
 function frame(now) {
   for (const g of Object.values(G)) if (g.step(now)) dirty = true;
+  if (updatePulses(now)) dirty = true;
   const k = Math.min(1, (now - camT0) / 700), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
   if (k < 1) dirty = true;
   camCur = camFrom.map((a, j) => a + (camTo[j] - a) * e);
@@ -893,6 +957,7 @@ function drawNumbers(H, panelH, topH, vf) {
   }
 }
 $('#numbers').onclick = () => { numbersOn = !numbersOn; $('#numbers').setAttribute('aria-pressed', numbersOn); dirty = true; };
+$('#flow').onclick = () => { flowOn = !flowOn; $('#flow').setAttribute('aria-pressed', flowOn); if (tr) setFlows(flowsFor(step, phase)); dirty = true; };
 
 // Compact panel: phones start with tokens, controls, a one-line title and the plain explanation.
 function setCompact(on) {
