@@ -24,7 +24,16 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--body); ove
 .lbl { position: absolute; transform: translate(-50%, -100%); font: 500 12px var(--display); color: var(--muted);
   white-space: nowrap; letter-spacing: 0.02em; text-shadow: 0 1px 3px var(--bg); }
 .lbl.hot { color: var(--fg); }
+.lbl.rside { transform: translate(-100%, -50%); }   /* ends at its point: the text going into the tokenizer */
 .lbl.side { transform: translate(0, -50%); }     /* starts at its point and reads to the right: captions beside a block */
+/* the card beside the dial: a few short paragraphs, right edge at its point; the one playing now is bright */
+.lbl.card { transform: translate(calc(-100% - 22px), -50%); white-space: normal; width: min(390px, 44vw); font: 400 13px/1.5 var(--body);
+  letter-spacing: 0; color: var(--muted); text-shadow: none; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 10px 13px; }
+.lbl.card p { margin: 0 0 7px; } .lbl.card p:last-child { margin-bottom: 0; }
+.lbl.card p.now { color: var(--fg); } .lbl.card b { color: var(--fg); font-weight: 600; }
+.lbl.card .ka { color: #f2c14e; font-weight: 600; } .lbl.card .kb { color: #5fd3b3; font-weight: 600; }
+.lbl.card p.tip { font-family: var(--mono); font-size: 12px; color: var(--fg); }
 header#top { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
   padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 8px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -55,7 +64,8 @@ section#panel { position: absolute; left: 0; right: 0; bottom: 0; background: va
 #seekRow { display: flex; align-items: center; gap: 10px; }
 #play { width: 36px; height: 30px; padding: 0; font-size: 14px; line-height: 1; flex: none; }
 #seek { position: relative; flex: 1; height: 20px; cursor: pointer; touch-action: none; }
-#seekSegs { position: absolute; left: 0; right: 0; top: 8px; height: 4px; display: flex; gap: 3px; transition: top 0.1s, height 0.1s; }
+#seekSegs { position: absolute; left: 0; right: 0; top: 8px; height: 4px; display: flex; gap: 2px; transition: top 0.1s, height 0.1s; }
+.sg.chap { margin-left: 5px; }
 #seek:hover #seekSegs, #seek.drag #seekSegs { top: 7px; height: 6px; }
 .sg { position: relative; flex: 1 1 0; min-width: 4px; background: rgba(255, 255, 255, 0.2); border-radius: 1px; overflow: hidden; }
 .sg i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); }
@@ -99,6 +109,20 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
 #track ol.steps .sn { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; }
 #track ol.steps b { color: #fff0f8; }
 #track ol.steps i { display: block; font-style: normal; font-size: 11px; opacity: .65; }
+/* Fullscreen: the canvas gets the screen; the panel keeps the tokens and the player; the explanation lives in a drawer
+   on the right, pulled out by its tab. Outside fullscreen the drawer is not there at all. */
+#drawer { display: none; }
+#app.fs #drawer { display: block; position: absolute; top: 0; right: 0; bottom: 0; width: min(400px, 86vw); z-index: 5;
+  background: var(--panel); border-left: 1px solid var(--line); backdrop-filter: blur(6px);
+  transform: translateX(100%); transition: transform 0.28s ease; }
+#app.fs #drawer.open { transform: none; }
+#drawerTab { position: absolute; left: -30px; top: 50%; width: 30px; height: 92px; margin-top: -46px; padding: 0;
+  border-radius: 6px 0 0 6px; border-right: none; writing-mode: vertical-rl; transform: rotate(180deg); font: 600 12px var(--display);
+  letter-spacing: 0.08em; background: var(--panel); }
+#drawerBody { height: 100%; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 10px;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) max(16px, env(safe-area-inset-right, 0px)) 16px 16px; }
+#app.fs #drawer .info { max-width: none; }
+#fs[aria-pressed="true"] { border-color: var(--accent); }
 @media (max-width: 640px) {
   .brand small { display: none; }
   .brand { font-size: 15px; }
@@ -127,6 +151,7 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
     <button id="overview" title="Show the whole layer">Whole layer</button>
     <button id="numbers" aria-pressed="true" title="Print values on cubes large enough to read; zoom in to see more">Numbers</button>
     <button id="flow" aria-pressed="true" title="Arrows showing which way values move in this step">Flow</button>
+    <button id="fs" aria-pressed="false" title="Fullscreen (f): the explanation moves to a pull-out tab on the side">⛶</button>
     <span id="status">loading…</span>
   </header>
   <section id="panel">
@@ -160,6 +185,11 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
       <div id="aboutBody"></div>
     </details>
   </section>
+  <!-- fullscreen: the explanation (.info, #about) is moved in here, a drawer pulled out by its tab -->
+  <aside id="drawer" aria-label="Explanation">
+    <button id="drawerTab" aria-expanded="false" aria-controls="drawer" title="Show or hide the explanation">text</button>
+    <div id="drawerBody"></div>
+  </aside>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/three@0.159.0/build/three.min.js"></script>
 <script>window.THREE || document.write('<script src="vendor/three-0.159.0.min.js"><\/script>');</script>
@@ -287,8 +317,12 @@ class Group {
       }
       // counting pass: a bright band runs over the stream while the counter cube counts its cells
       if (glow && this === glow.g && i < glow.n && i >= glow.n - 40) { const w = 0.8 * (1 - (glow.n - 1 - i) / 40); r += (1 - r) * w; g += (0.95 - g) * w; b += (0.6 - b) * w; }
+      // the value under the mouse (or last tapped) lifts up out of its row and brightens
+      let lift = 0;
+      const lu = lifts.has(this) ? lifts.get(this).get(i) : null;
+      if (lu) { const e = lu.u * lu.u * (3 - 2 * lu.u), w = 0.35 * e; lift = liftH(sy) * e; r += (1 - r) * w; g += (1 - g) * w; b += (1 - b) * w; }
       m.makeScale(sx, sy, sz);
-      m.setPosition(P[j], P[j + 1], P[j + 2]);
+      m.setPosition(P[j], P[j + 1] + lift, P[j + 2]);
       this.mesh.setMatrixAt(i, m);
       this.mesh.instanceColor.setXYZ(i, r, g, b);
     }
@@ -296,22 +330,94 @@ class Group {
     this.mesh.instanceColor.needsUpdate = true;
   }
 }
+let hover = null;    // { g, i }: the value under the mouse, or the one last tapped; drawn lifted (Group.write)
+// Hover lifts, eased in and out on the wall clock (so they also move while the animation is paused):
+// Group -> Map(instance -> { u: how far up now 0..1, to: 0 or 1 }). An entry is dropped once it is back down.
+const lifts = new Map(), LIFT_MS = 200, liftH = sy => Math.max(0.45, sy * 0.9);
+let liftT = 0;
+function liftTo(h, to) {
+  if (!h) return;
+  let m = lifts.get(h.g);
+  if (!m) lifts.set(h.g, (m = new Map()));
+  const e = m.get(h.i);
+  if (e) e.to = to; else if (to) m.set(h.i, { u: 0, to });
+}
+function stepLifts(real) {
+  const dt = liftT ? Math.min(100, real - liftT) : 16;
+  liftT = real;
+  let any = false;
+  for (const [g, m] of lifts) {
+    let ch = false;
+    for (const [i, e] of m) {
+      if (e.u === e.to) continue;
+      e.u = e.to > e.u ? Math.min(e.to, e.u + dt / LIFT_MS) : Math.max(e.to, e.u - dt / LIFT_MS);
+      ch = true;
+      if (e.u === 0 && e.to === 0) m.delete(i);
+    }
+    if (!m.size) lifts.delete(g);
+    if (ch) { g.write(); any = true; }
+  }
+  return any;
+}
+const EPICK = 6;     // into the stream: how many of the row's first values are shown one by one before the rest fill in
+const SLIVER = (32 / 576) * 0.9;   // a table row's values side by side along a slab 32 long: each this wide, with a gap
+const BITS = 24, RS_N = 43 + BITS;   // RS: the ruler, 40 pieces, the side/cut, the cut-off overhang and its bits
 const G = {
   R: new Group(576, 0.8), Q: new Group(576, 0.8), K: new Group(192, 0.8), V: new Group(192, 0.8),
   TK: new Group(96, 1), B: new Group(48, 1), F: new Group(576, 0.8),
   EB: new Group(48, 1),                                            // embedding table, drawn as 48 slabs
   // inside a head: NS the sum and its partner; SA/SB the pair copies flying into the slots; CH the volume-knob column
   // (0 sum, 1 count, 2 mean, 3 root, 4 one, 5 knob); RS its pictures (0: the ruler "1", 1-40: pieces of the root laid
-  // along it, 41: the side of the square). Each multiply row k has A (left board; row 0 uses the stream R itself),
-  // B (right board), S (the empty pair slots) and P (the products).
-  NS: new Group(2, 0.8), SA: new Group(576, 0.8), SB: new Group(576, 0.8), CH: new Group(6, 0.8), RS: new Group(42, 1),
+  // along it, 41: the side of the square, or the cut; 42: the overhang cut off; 43..: its bits). Each multiply row k has
+  // A (left board; row 0 uses the stream R itself), B (right board), S (the empty pair slots) and P (the products).
+  NS: new Group(2, 0.8), SA: new Group(576, 0.8), SB: new Group(576, 0.8), CH: new Group(6, 0.8), RS: new Group(RS_N, 1),
+  MT: new Group(1, 1),                                             // the multiplier row: one per layer
+  WT: new Group(64, 1),                                            // the weight table: one question block's 64 rows
+  FS: new Group(576, 1),                                           // the empty slots a table row is folded into
+  // the opening: LB the 30 layer boxes (see-through), MC the tokenizer (body, intake, outlet), TB the token boxes
+  LB: new Group(30, 1), MC: new Group(3, 1), TB: new Group(96, 1),
 };
-for (let k = 0; k < 4; k++) {
+for (let k = 0; k < 5; k++) {
   if (k) G['A' + k] = new Group(576, 0.8);
   G['B' + k] = new Group(576, 0.8); G['S' + k] = new Group(576, 1); G['P' + k] = new Group(576, 0.8);
 }
 const ROW_GROUPS = Object.keys(G).filter(k => /^[ABP]\d$/.test(k)).map(k => G[k]);
 for (const [k, g] of Object.entries(G)) { g.name = k; g.linked = ['R', 'Q', 'F', 'SA', 'SB'].includes(k) || /^[ABP]\d$/.test(k); g.write(); }
+// The layer boxes are see-through walls: the camera passes into layer 1, and what is inside shows through.
+Object.assign(G.LB.mesh.material, { transparent: true, opacity: 0.13, depthWrite: false });
+G.LB.mesh.renderOrder = -1;
+const NOPICK = new Set(['EB', 'WT', 'MT', 'FS', 'LB', 'MC']);   // tables, slots, walls, the machine: not numbers
+// The lifter beside the weight table, for comic relief: a little figure pressing a barbell, one rep every 2.6 s on the
+// animation clock (so ❚❚ freezes him mid-rep). Not in G: no stage moves him; dudeFrame poses him every frame.
+const DUDE = new Group(14, 1);
+DUDE.name = 'DUDE'; DUDE.write();
+const D_SKIN = C3('#f2c9a0'), D_RED = C3('#ff7b6b'), D_SHIRT = C3('#4c8bf5'), D_PANTS = C3('#6b7c93'), D_BAR = C3('#c9d1dc'),
+  D_PLATE = C3('#ff5ea8'), D_EYES = C3('#1a1d24');
+function dudeFrame(now) {
+  const on = !!(tr && W && STEPS[step].key === 'head' && phase >= 7);
+  if (!on) { if (DUDE.shown) { DUDE.cur.s.fill(0); DUDE.write(); DUDE.shown = false; dirty = true; } return; }
+  DUDE.shown = true;
+  const u = (now % 2600) / 2600, sm = x => x * x * (3 - 2 * x);
+  const lift = u < 0.35 ? sm(u / 0.35) : u < 0.55 ? 1 : u < 0.85 ? 1 - sm((u - 0.55) / 0.3) : 0;   // press, hold, lower, rest
+  const x0 = DUDEX, y0 = DUDEY, z = 0.6, dip = 0.4 * Math.sin(Math.PI * Math.min(1, u / 0.12)) * (u < 0.12 ? 1 : 0);
+  const shake = lift > 0.97 ? 0.12 * Math.sin(now / 45) : 0;            // the bar wobbles at the top
+  const sy = y0 + 5.8 - dip, hy = y0 + 6.3 + 3.6 * lift - dip, face = lift > 0.6 ? (lift - 0.6) / 0.4 : 0;
+  const skin = D_SKIN.map((c, j) => c + (D_RED[j] - c) * face);           // goes red holding it up
+  const parts = [
+    [[x0 - 0.55, y0 + 1.5 - dip / 2, z], [0.55, 3 - dip, 0.55], D_PANTS], [[x0 + 0.55, y0 + 1.5 - dip / 2, z], [0.55, 3 - dip, 0.55], D_PANTS],
+    [[x0, y0 + 4.5 - dip, z], [2.0, 3.0, 0.9], D_SHIRT],
+    [[x0, y0 + 6.85 - dip, z], [1.35, 1.35, 1.35], skin],
+    [[x0, y0 + 7.0 - dip, z + 0.69], [0.8, face > 0.5 ? 0.06 : 0.16, 0.05], D_EYES],   // eyes: squinting under the load
+    [[x0 - 1.55, sy, z], [1.1, 0.45, 0.45], skin], [[x0 + 1.55, sy, z], [1.1, 0.45, 0.45], skin],
+    [[x0 - 2.1, (sy + hy) / 2, z], [0.45, Math.max(0.45, hy - sy + 0.25), 0.45], skin],
+    [[x0 + 2.1, (sy + hy) / 2, z], [0.45, Math.max(0.45, hy - sy + 0.25), 0.45], skin],
+    [[x0, hy + 0.3, z], [7.4, 0.25, 0.25], D_BAR],
+    [[x0 - 3.4, hy + 0.3 + shake, z], [0.35, 2.1, 2.1], D_PLATE], [[x0 + 3.4, hy + 0.3 - shake, z], [0.35, 2.1, 2.1], D_PLATE],
+    [[x0 - 3.0, hy + 0.3 + shake, z], [0.3, 1.5, 1.5], D_PLATE], [[x0 + 3.0, hy + 0.3 - shake, z], [0.3, 1.5, 1.5], D_PLATE],
+  ];
+  parts.forEach(([p, s, c], i) => { for (let a = 0; a < 3; a++) { DUDE.cur.p[i * 3 + a] = p[a]; DUDE.cur.s[i * 3 + a] = s[a]; DUDE.cur.c[i * 3 + a] = c[a]; } });
+  DUDE.write(); dirty = true;
+}
 // A merge: cubes fly one after another into a holder that counts up the running total (head parts "add the squares", "add up").
 const MERGE_MS = 4200, HOLD = C3('#ffd76a');
 let merge = null;   // { g, idx, cum (running totals in fly order), t0, n }
@@ -334,7 +440,7 @@ lineGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(MAXV * 
 const lineMat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false });
 const lines = new THREE.LineSegments(lineGeo, lineMat); lines.frustumCulled = false; scene.add(lines);
 let lineFade = { from: 0, to: 0, t0: 0 };
-function setLines(segs) {
+function setLines(segs, keep = false) {     // keep: redraw only (an animated stage), the fade stays as it is
   const P = lineGeo.attributes.position.array, Cc = lineGeo.attributes.color.array, N = 14;
   let v = 0;
   for (const s of segs) {
@@ -349,23 +455,55 @@ function setLines(segs) {
   }
   lineGeo.setDrawRange(0, v);
   lineGeo.attributes.position.needsUpdate = true; lineGeo.attributes.color.needsUpdate = true;
-  lineFade = { from: 0, to: segs.length ? 1 : 0, t0: performance.now() };
+  // from the current opacity: lines that change between two stages do not blink out and back in
+  if (!keep) lineFade = { from: lineMat.opacity, to: segs.length ? 1 : 0, t0: performance.now() };
 }
 
 // ---------- layout ----------
 const EX = -64, BX = 48, CX = 86, DX = 116, FX = 166, GX = 214;
 // Inside a head: four multiply rows (square, knob, multipliers, weights) at RY, each a left board (XL), the pair slots
 // (centre, SPX apart) and a right board (XR). The volume knob is worked out in a column centred under the squares
-// (levels CY: sum · mean · root · knob); row 1 starts below it. The final sum sits centred under row 3, the turn below.
-const RY = [0, -56, -80, -104], SPX = 2.2, XL = -55, XR = 55, CY = [-13, -19, -26, -33], RULY = -29.6;
-const SUMY = RY[3] - 13, SY = RY[3] - 24, DIALX = 13, DIALR = 6;
+// (levels CY: sum · mean · root · knob); row 1 starts below it. The sum sits centred under row 3. Row 4, the partner,
+// repeats row 3's calculation R4X to the right of it; the two sums meet halfway (PX) as the pair, the turn below that.
+const RY = [0, -56, -80, -104], SPX = 2.2, XL = -55, XR = 55, CY = [-13, -19, -26, -33], RULY = -29.6, R4X = 150;
+const rowX = k => (k === 4 ? R4X : 0), rowY = k => RY[Math.min(k, 3)];
+const SUMY = RY[3] - 13, PX = R4X / 2, SY = SUMY - 14, DIALX = PX + 13, DIALR = 8;
+// The turn, broken down over six parts of the head step (TURN0 … LANDP - 1), then the landing (LANDP). Each part plays
+// its stages in order; the dial shows everything up to the current stage (turnSegs), the card beside it explains it.
+const TURN0 = 13, TURN_PARTS = [['vec', 'along', 'up', 'arrow', 'len'], ['why'], ['speed1', 'speed2', 'speed3'], ['pos'], ['rotate'],
+  ['cs', 'mixA', 'mixB', 'sum']], LANDP = TURN0 + TURN_PARTS.length, TURN_TAGS = TURN_PARTS.flat();
+const TURN_NAMES = ['the pair as an arrow', 'why turn it', 'how fast', 'how far', 'the turn', 'cos and sin'];
+const isTurn = ph => ph >= TURN0 && ph < LANDP;
+const TURNCAM = [DIALX - 14, 56, SY + 1, 27];   // the dial on the right, room on the left for the card
+// a caption point on the dial, worked out from the head demo (the dial's centre when the weights are not loaded)
+const turnPt = f => () => (W && tr ? f(headDemo(layer, tok, demoHead)) : [DIALX, SY, 0]);
+// The weight table of layer 1 (W_q), drawn like the embedding table: the 64 rows of one question block, one row per
+// number. Row 2p makes number 2p, row 2p + 1 its partner. It sits right of rows 1-2. Above it, the multiplier row: the
+// layer's one row of 576 learned multipliers (the norm's gain). The lifter stands beside both.
+const WTX = 128, WTY0 = -52, WTS = 0.58, wtY = r => WTY0 - r * WTS, MTY = WTY0 + 8, DUDEX = 100, DUDEY = MTY - 9;
+const stripPos = (i, y, z) => [WTX - 16 + ((i + 0.5) * 32) / 576, y, z];   // a row's 576 values along its slab at height y
+const WTCAM = [WTX - 2, 76, WTY0 - 13, 54], MTCAM = [WTX - 6, 60, MTY - 4, 26];
+// A row's 576 values folded the way every board lays them out: 32 to a line, 18 lines, value i on line i ÷ 32 at
+// place i mod 32. The table is 32 wide too, so the fold stands in front of it (under the multiplier row for row 2).
+const foldY = k => (k === 2 ? MTY - 13 : wtY(30)), foldPos = (i, k) => [WTX + (i % 32) - 15.5, foldY(k) + 8.5 - Math.floor(i / 32), 5];
+const FOLDCAM = k => (k === 2 ? [WTX - 6, 62, MTY - 11, 40] : WTCAM);
+const FOLD_MARKS = [0, 31, 544, 575];         // the fold's corners: the first and last value of the first and last line
+// into the stream: where the row's first values float once picked out of it, side by side above the row's start
+const epickPos = i => [EX - 15 + i * 1.8, slabY(tokSlab()) + 2.6, 1.2];
+const MATCH = [0, 1, 2, 33, 300, 575];        // places linked across a row's two boards in the match stage
 // In the head step the question block the pair lands in is drawn beside the dial (its usual place is under row 0).
 const LANDX = DIALX + 20, landCell = i => [LANDX + (i % 8) - 3.5, SY + 3.5 - Math.floor(i / 8), 0];
 const gridPos = (i, x0, y0, z = 0) => [x0 + (i % 32) - 15.5, y0 + 8.5 - Math.floor(i / 32), z];
 const residPos = (i, x0, z = 0) => gridPos(i, x0, 0, z);
 const slotPos = (i, y0, side = 0) => [((i % 32) - 15.5) * SPX + side * 0.47, y0 + 8.5 - Math.floor(i / 32), 0];
-// The camera looks from the left at an angle, so the wide views sit a little left of centre.
-function rowView(k) { return k === 0 ? [-6, 164, RY[0], 24] : k === 1 ? [-6, 164, -27, 82] : [-6, 164, (RY[k - 1] + RY[k]) / 2, 50]; }
+// A row's view: its two boards and the slots between them. (fitCamera centres it for the viewing angle.)
+function rowView(k) {
+  if (k === 0) return [0, 164, RY[0], 24];
+  if (k === 1) return [0, 164, -27, 82];
+  if (k === 4) return [R4X, 164, RY[3], 24];
+  return [0, 164, (RY[k - 1] + RY[k]) / 2, 50];
+}
+const PAIRCAM = [PX, 240, RY[3] - 3, 44];   // both calculations, their sums meeting in the middle
 function headCam(ph) {
   if (ph === 0) return [0, 40, 0, 30];
   if (ph === 1) return rowView(0);
@@ -376,13 +514,15 @@ function headCam(ph) {
   if (ph <= 8) return rowView(2);
   if (ph <= 10) return rowView(3);
   if (ph === 11) return [0, 82, RY[3] - 6, 36];
-  if (ph === 12) return [DIALX / 2, 34, SY, 24];
-  return [LANDX / 2, LANDX + 14, SY, 26];
+  if (ph === 12) return PAIRCAM;
+  if (isTurn(ph)) return TURNCAM;
+  return [(PX + LANDX) / 2, LANDX - PX + 14, SY, 26];
 }
+const CUTCAM = [5.5, 11, RULY - 1.5, 7.5];   // close on the end of the "1" in 1 ÷ root, where the overhang is cut
 // A bar from a flat base: positive sticks out toward the viewer, negative goes back into the screen.
-function barSet(g, i, p, v, sc) {
+function barSet(g, i, p, v, sc, col = null) {   // col: a highlight colour instead of the value's own
   const d = 0.25 + Math.min(10, (Math.abs(v) / sc) * 1.6);
-  g.set(i, [p[0], p[1], (v < 0 ? -1 : 1) * d * 0.4], [1, 1, d], valColor(v / sc));
+  g.set(i, [p[0], p[1], (v < 0 ? -1 : 1) * d * 0.4], [1, 1, d], col || valColor(v / sc));
 }
 const slabC = h => [BX + ((h % 3) - 1) * 10, (1 - Math.floor(h / 3)) * 10];
 const headCell = (h, i) => { const [cx, cy] = slabC(h); return [cx + (i % 8) - 3.5, cy + 3.5 - Math.floor(i / 8), 0]; };
@@ -393,6 +533,70 @@ const tokSp = () => Math.min(1.6, 34 / Math.max(tr.T - 1, 1));
 const tokPos = j => [CX, ((tr.T - 1) / 2) * tokSp() - j * tokSp(), 0];
 const slabY = k => 20 - k * 0.88;
 const tokSlab = () => Math.min(47, Math.floor((tr.h.ids[tok] / tr.h.model.vocab) * 48));
+
+// ---------- the opening: the model as 30 layer boxes, the tokenizer, the token boxes ----------
+// Layer 1's box is the world every other picture is drawn in (WBC its centre, WBS its size); the other 29 stand in a
+// row to its right. The tokenizer machine stands left of it. The tokens it cuts queue between the two (tokQ), ride
+// into layer 1 and wait in a tray above the lookup table (tokTray); the token being followed then looks up its row.
+// The 30 boxes stand in 3 rows of 10, read like text: layer 1 top left, layer 30 bottom right.
+const WBC = [75, -47, 0], WBS = [350, 180, 200], LPITCH = 440, LROW = 280;
+const LBP = k => [WBC[0] + (k % 10) * LPITCH, WBC[1] - Math.floor(k / 10) * LROW, WBC[2]];
+const MACH = [-470, -47, 0], MACHS = [110, 90, 70], INTAKE = MACH[0] - MACHS[0] / 2 - 6;
+const OVERCAM = [(MACH[0] - 120 + LBP(9)[0] + WBS[0] / 2) / 2, LBP(9)[0] + WBS[0] / 2 - MACH[0] + 260, WBC[1] - LROW, 3 * LROW + 140];
+const MACHCAM = [-430, 760, WBC[1] + 6, 300], ENTERCAM = [WBC[0], WBS[0] * 1.04, WBC[1], WBS[1] * 1.04];
+const LOOKCAM = [EX + 4, 62, 9, 56];
+const LB_ON = C3('#4b3d56'), LB_OFF = C3('#2c3442'), MACH_C = C3('#3c4656'), MACH_D = C3('#1d232d'), TOKBOX = C3('#c9963e');
+function tokQ(j) {             // the queue between the machine and layer 1: 9 to a line
+  const rows = Math.ceil(tr.T / 9), c = Math.min(26, 190 / rows);
+  return { p: [MACH[0] + MACHS[0] / 2 + 16 + ((j % 9) + 0.5) * c, WBC[1] + ((rows - 1) / 2 - Math.floor(j / 9)) * c, 0], s: c * 0.8 };
+}
+function tokTray(j) {          // inside layer 1: one row above the lookup table
+  const w = 48, c = Math.min(2.2, w / tr.T);
+  return { p: [EX - w / 2 + (j + 0.5) * c, 30, 1], s: c * 0.85 };
+}
+const TOKLOOK = 2.4, lookPos = y => [EX + 11, y, 2.6], asidePos = () => [EX + 19.5, slabY(tokSlab()), 1];
+// The token's box during the lookup, read from where it is drawn: the row it is passing (rows run 0 at the top).
+function scanRow() {
+  const y = G.TB.cur.p[tok * 3 + 1], kf = Math.max(0, (slabY(0) - y) / 0.88);
+  return Math.min(tr.h.ids[tok], Math.round((kf / 48) * tr.h.model.vocab));
+}
+function boxEdges(c, s, col, alpha) {
+  const segs = [], h = s.map(v => v / 2), P = (a, b, d) => [c[0] + a * h[0], c[1] + b * h[1], c[2] + d * h[2]];
+  for (const a of [-1, 1]) for (const b of [-1, 1]) {
+    segs.push({ a: P(-1, a, b), b: P(1, a, b), c: col, alpha }, { a: P(a, -1, b), b: P(a, 1, b), c: col, alpha }, { a: P(a, b, -1), b: P(a, b, 1), c: col, alpha });
+  }
+  return segs;
+}
+// sub (a stage of the opening): feed (the string goes in), tb ('queue' | 'tray'), eb (the storage shows), look
+// ('top' | 'row' | 'aside': the followed token's box during the lookup), lit (its row found), vals (its numbers shown)
+function openingScene(ph, sub, ebOn) {
+  const o = sub || {}, segs = [];
+  for (let k = 0; k < 30; k++) {
+    G.LB.set(k, LBP(k), WBS, k === 0 ? LB_ON : LB_OFF);
+    segs.push(...boxEdges(LBP(k), WBS, k === 0 ? DOCK : MARK, k === 0 ? 0.6 : 0.3));
+  }
+  // the tokenizer: a body, an intake on the left where the text goes in, an outlet on the right where tokens come out
+  G.MC.set(0, MACH, o.feed ? MACHS.map(v => v * 1.05) : MACHS, MACH_C);
+  G.MC.set(1, [INTAKE, MACH[1], 0], [12, 36, 36], MACH_D);
+  G.MC.set(2, [MACH[0] + MACHS[0] / 2 + 6, MACH[1], 0], [12, 36, 36], MACH_D);
+  // the token boxes: in the machine (part 0), queued (1), in the tray inside layer 1 (2 on)
+  const where = o.tb || (ph === 0 || o.feed ? 'machine' : ph === 1 ? 'queue' : 'tray');
+  for (let j = 0; j < 96; j++) {
+    if (j >= tr.T) { G.TB.set(j, MACH, 0, TOKBOX); continue; }
+    const followed = j === tok && ph >= 3;
+    if (followed) {
+      const look = o.look || 'aside';
+      const p = look === 'top' ? lookPos(slabY(0) + 1.6) : look === 'row' ? lookPos(slabY(tokSlab())) : asidePos();
+      G.TB.set(j, p, TOKLOOK, DOCK);
+    } else if (where === 'machine') G.TB.set(j, MACH, 0, TOKBOX);
+    else { const q = where === 'queue' ? tokQ(j) : tokTray(j); G.TB.set(j, q.p, q.s, TOKBOX); }
+  }
+  G.TB.vals.fill(0);
+  // layer 1's storage: the lookup table (drawn by buildState), the weight tables and the multiplier rows
+  for (let r = 0; r < 64; r++) G.WT.set(r, [WTX, wtY(r), 0], ebOn ? [32, 0.4, 1.0] : 0, SLAB);
+  G.MT.set(0, [WTX, MTY, 0], ebOn ? [32, 0.4, 1.0] : 0, SLAB);
+  return segs;
+}
 
 // ---------- steps ----------
 // plain: everyday explanation, shown by default. tech: the technical version, shown under Details.
@@ -436,8 +640,8 @@ function flowsFor(s, ph) {
   const toOutput = [[FX + 17, 0, Z], [GX - 17, 0, Z]], toNext = [[GX + 17, 0, Z], [GX + 27, 0, Z]];
   if (overview) return [toHeads, fromTokens, toConcat, toDetectors, toOutput, toNext];
   switch (key) {
-    case 'embed': return ph === 0 ? [] : [[[EX + 17, slabY(tokSlab()), Z], [-17, 0, Z]]];
-    case 'in': return [[[-28, 0, Z], [-17, 0, Z]]];
+    case 'embed': return [];                      // the row's values fly into empty slots: the animation is the flow
+    case 'in': return [];                         // the stream is already here: nothing flows in from anywhere
     case 'head': return [];                       // the cubes themselves fly: the animation is the flow
     case 'qkv': return [toHeads];
     case 'attend': case 'headsout': return [fromTokens];
@@ -448,19 +652,20 @@ function flowsFor(s, ph) {
   }
 }
 const STEPS = [
-  { key: 'embed', short: 'text→numbers', t: 'From text to numbers', phases: 2, gap: 1300,
-    plain: 'Computers cannot read words, only numbers. The text is cut into pieces called tokens, and each token has an ID number. The model looks that number up in a big table and copies out its row: 576 numbers that are the token\'s starting description.',
-    tech: 'Token embedding: row <id> of the 49,152 × 576 embedding matrix (SmolLM2 ties it to the output layer). This row is the residual stream entering layer 1.',
-    cam: ph => (ph === 0 ? [EX, 50, 4, 44] : [(EX + 0) / 2, 112, 4, 44]) },
+  { key: 'embed', short: 'text→numbers', t: 'From text to numbers', phases: 5, gap: 1300,
+    plain: 'The model is 30 layers, one after another, and every token goes through all of them. Computers cannot read words, only numbers, so first a machine, the tokenizer, cuts the text into pieces called tokens, each with an ID number. In layer 1 the model looks that number up in a big table and copies out its row: 576 numbers that are the token\'s starting description.',
+    tech: 'Tokenizer (BPE, 49,152 tokens), then the token embedding: row <id> of the 49,152 × 576 embedding matrix (SmolLM2 ties it to the output layer). Drawn inside layer 1\'s box; in the model the lookup is the step just before layer 1. This row is the residual stream entering layer 1.',
+    cam: ph => (ph <= 1 ? MACHCAM : ph <= 3 ? LOOKCAM : [(EX + 0) / 2, 112, 4, 44]) },
   { key: 'in', short: 'in', t: 'The stream', phases: 1,
     plain: 'This is the token\'s "stream": 576 numbers that together describe it. Every layer reads the stream and adds a small correction to it. Orange cubes are positive numbers, blue ones negative, and brighter means bigger.',
     tech: 'Residual stream entering the layer. Colour is relative to the 98th percentile of |value| in this vector; a few outlier dimensions saturate.',
     cam: () => [0, 42, 0, 26] },
-  { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: 14, gap: 1800,
-    plain: 'How one number of a head is made. The stream is shown as bars from a flat base: orange (positive) bars stick out toward you, blue (negative) bars go back into the screen, and longer means bigger. First the volume knob is worked out: every number is squared (multiplied by itself, so all become positive), the 576 squares are added up, divided by 576, and the square root of that is the row\'s typical size. 1 ÷ that size is the knob, and every number is multiplied by it so the row has a standard loudness; the shape does not change. Then each of the 576 positions is multiplied by its own learned multiplier: most are small, a few are large, and some are negative, which flips the sign. This is where new spikes appear and loud numbers get muted. Then each number is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
+  { key: 'head', short: 'inside a head', t: 'Inside a head: one number, by hand', phases: LANDP + 1, gap: 1800,
+    plain: 'How one number of a head is made. The stream is shown as bars from a flat base: orange (positive) bars stick out toward you, blue (negative) bars go back into the screen, and longer means bigger. First the volume knob is worked out: every number is squared (multiplied by itself, so all become positive), the 576 squares are added up, divided by 576, and the square root of that is the row\'s typical size. 1 ÷ that size is the knob, and every number is multiplied by it so the row has a standard loudness; the shape does not change. Then each of the 576 positions is multiplied by its own learned multiplier: most are small, a few are large, and some are negative, which flips the sign. This is where new spikes appear and loud numbers get muted. Then each number is multiplied by its own fixed weight, and all 576 results are added into one number. A partner number is made the same way, from the same numbers but with the weights for the next number of the question (the model keeps one row of 576 weights per number) of weights. The pair is drawn as an arrow on a dial and turned by an angle that depends on where the token sits in the sentence; turning changes the direction of the arrow, never its length. Tap any cube to follow that position through every step.',
     tech: 'RMSNorm x / √(mean(x²) + ε) × g: the volume knob is 1/√(mean(x²) + ε); g is the learned per-dimension gain (signed). One row of W_q (576 weights) dotted with the normalised vector gives one pre-rotation query value. RoPE rotates the adjacent pair (2p, 2p+1) as a 2D vector by position × 100000^(−2p/64); the dial plots (value 2p, value 2p+1). The pair buttons pick pair p = 0, 4 or 8 (57°, 14°, 3.2° per token) or the pair whose weight rows have the largest norm. The viewer recomputes it and compares with the recorded value.',
     // parts: 0 arrives · 1 square each · 2 add the squares · 3 ÷ 576 · 4 square root · 5 1 ÷ that · 6 volume knob ·
-    // 7 multipliers · 8 multiplied · 9 weights · 10 multiply · 11 add up · 12 turn · 13 land (stages: headScript)
+    // 7 multipliers · 8 multiplied · 9 weights · 10 multiply · 11 add up · 12 the partner · 13-18 the turn, broken down
+    // (TURN_PARTS) · 19 land (stages: headScript)
     cam: headCam },
   { key: 'qkv', short: 'q k v', t: 'All the heads', phases: 1,
     plain: 'That same recipe runs for every number, each with its own weights. The result: 9 "question" blocks (what is this token looking for?), plus 3 "label" blocks and 3 "content" blocks that every token offers to the others. Each label and content block is shared by the 3 question blocks in its row.',
@@ -495,9 +700,41 @@ const SI = Object.fromEntries(STEPS.map((S, i) => [S.key, i]));
 const stepAvail = i => STEPS[i].key !== 'embed' || layer === 0;
 
 const LABELS = [
-  { t: 'embedding table · one row per token · 49,152 rows × 576', p: () => [EX, 21.6, 0], keys: ['embed'] },
-  { t: '', p: () => [EX + 18, slabY(tokSlab()) + 0.6, 0], keys: ['embed'], hot: true, text: () => `“${showTok(tr.h.tokens[tok])}” = ID ${tr.h.ids[tok]}` },
-  { t: 'the stream · 576 numbers', p: () => [0, 10.5, 0], keys: ['embed', 'in', 'qkv', 'attend', 'headsout', 'concat'], minPh: { embed: 1 } },
+  // the opening: the layers, the tokenizer and the text it takes in, the tokens, layer 1's storage, the lookup
+  ...Array.from({ length: 30 }, (_, k) => ({ t: `layer ${k + 1}`, p: () => [LBP(k)[0], LBP(k)[1] + WBS[1] / 2 + 12, 0], keys: ['embed'], maxPh: { embed: 1 } })),
+  { t: '', p: () => [(LBP(0)[0] + LBP(9)[0]) / 2, LBP(0)[1] + WBS[1] / 2 + 80, 0], keys: ['embed'], maxPh: { embed: 0 }, hot: true,
+    text: () => (stageTag() === 'layers' ? 'the model: 30 layers in a row · every token goes through all 30, one after another' : '') },
+  { t: 'the tokenizer', p: () => [MACH[0], MACH[1] + MACHS[1] / 2 + 14, 0], keys: ['embed'], maxPh: { embed: 2 } },
+  { t: '', p: () => [INTAKE - 10 + (stageTag() === 'feed' ? stageU() * 50 : 0), MACH[1], 0], keys: ['embed'], maxPh: { embed: 1 }, hot: true, rside: true,
+    op: () => (stageTag() === 'feed' ? Math.max(0, 1 - stageU() * 1.2) : 1),
+    text: () => (phase === 0 || stageTag() === 'feed' ? `“${promptText()}”` : '') },
+  { t: '', p: () => [tokQ(4).p[0], tokQ(0).p[1] + tokQ(0).s * 1.1, 0], keys: ['embed'], minPh: { embed: 1 }, maxPh: { embed: 2 }, hot: true,
+    text: () => (stageTag() === 'tokens' || (phase === 1 && !stageTag()) ? `cut into ${tr.T} tokens: pieces the model knows, each with an ID number`
+      : stageTag() === 'ride' ? 'into layer 1' : '') },
+  { t: '', p: () => [WBC[0], WBC[1] + WBS[1] / 2 - 14, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, hot: true,
+    text: () => (stageTag() === 'enter' ? 'inside layer 1: its storage · the tables it reads from' : '') },
+  { t: '', p: () => [WTX, WTY0 + 2.4, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, text: () => (stageTag() === 'enter' ? 'weight tables' : '') },
+  { t: '', p: () => [WTX, MTY + 2.2, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, text: () => (stageTag() === 'enter' ? 'multiplier rows' : '') },
+  { t: 'the lookup table · one row per token · 49,152 rows × 576', p: () => [EX, 21.6, 0], keys: ['embed'], minPh: { embed: 2 } },
+  { t: '', p: () => [EX, 32.4, 1], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 3 }, text: () => (stageTag() === 'inside' || stageTag() === 'fetch' ? 'the tokens, in order' : '') },
+  // the lookup: the followed token's box says what it looks for and which row it is passing
+  { t: '', p: () => { const q = curPos(G.TB, tok); return [q[0] + 2, q[1], q[2]]; }, keys: ['embed'], minPh: { embed: 3 }, maxPh: { embed: 3 }, hot: true, side: true,
+    text: () => { const id = tr.h.ids[tok], tg = stageTag();
+      return tg === 'fetch' ? `“${showTok(tr.h.tokens[tok])}” is token ID ${id}: it needs row ${id}` : tg === 'scan' ? `row ${scanRow().toLocaleString('en')} …`
+        : tg === 'halt' ? `row ${id}: found` : ''; } },
+  { t: '', p: () => [EX + 23.4, slabY(tokSlab()), 0], keys: ['embed'], minPh: { embed: 3 }, hot: true, side: true,
+    text: () => (phase > 3 || !stageTag() || stageTag() === 'found' ? `“${showTok(tr.h.tokens[tok])}” = ID ${tr.h.ids[tok]}` : '') },
+  { t: 'the stream · 576 numbers', p: () => [0, 10.5, 0], keys: ['embed', 'in', 'qkv', 'attend', 'headsout', 'concat'], minPh: { embed: 4 } },
+  { t: '', p: () => [0, -10.8, 0], keys: ['embed'], minPh: { embed: 1 }, hot: true,
+    text: () => (stageTag() === 'efill' ? 'filled in order: 0–31 make line 1, 32–63 line 2, … 544–575 line 18' : '') },
+  // into the stream, close up: the first values picked out of the row, each with its number (when the cubes do not
+  // print it themselves); then carried to the slots
+  ...Array.from({ length: EPICK }, (_, j) => ({ t: '', p: () => { const q = epickPos(j); return [q[0], q[1] + 1.1, q[2]]; }, keys: ['embed'], minPh: { embed: 1 }, hot: true,
+    text: () => { const s = stageSub(); return !numbersOn && stageTag() === 'epick' && s && s.picked > j ? `${G.R.vals[j] >= 0 ? '+' : ''}${G.R.vals[j].toFixed(3)}` : ''; } })),
+  { t: '', p: () => [EX - 15 - 0.5, slabY(tokSlab()) + 4.6, 1.2], keys: ['embed'], minPh: { embed: 1 }, hot: true, side: true,
+    text: () => (stageTag() === 'epick' ? `the row's first numbers, one by one · orange is positive, blue negative · the nearer 0, the darker` : '') },
+  { t: '', p: () => [-16, 10.2, 1], keys: ['embed'], minPh: { embed: 1 }, hot: true, side: true,
+    text: () => (stageTag() === 'ecarry' ? 'number 0 to the first slot, 1 to the next, …' : '') },
   { t: 'the stream as it arrives · orange sticks out, blue goes back', p: () => [0, 10.5, 0], keys: ['head'], maxPh: { head: 0 } },
   // row 0: the squares; the chain to the left of it
   { t: 'the stream', p: () => [XL, RY[0] + 10.5, 0], keys: ['head'], minPh: { head: 1 } },
@@ -508,7 +745,7 @@ const LABELS = [
   { t: '', p: () => [5.8, CY[0], 0], keys: ['head'], minPh: { head: 2 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(0) },
   { t: '', p: () => [3.4, CY[1], 0], keys: ['head'], minPh: { head: 3 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(1) },
   { t: '', p: () => [5.8, CY[2], 0], keys: ['head'], minPh: { head: 4 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(2) },
-  { t: '', p: () => [6, RULY, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, side: true, text: () => chainText(3) },
+  { t: '', p: () => [8, RULY, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, side: true, text: () => chainText(3) },
   { t: '', p: () => [3.4, CY[3], 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(4) },
   // row 1: the volume knob
   { t: 'the stream again', p: () => [XL, RY[1] + 10.5, 0], keys: ['head'], minPh: { head: 6 } },
@@ -518,13 +755,57 @@ const LABELS = [
   { t: 'after the knob', p: () => [XL, RY[2] + 10.5, 0], keys: ['head'], minPh: { head: 7 } },
   { t: 'the 576 learned multipliers · blue ones flip the sign', p: () => [XR, RY[2] + 10.5, 0], keys: ['head'], minPh: { head: 7 } },
   { t: 'each × its multiplier: new spikes, some signs flipped', p: () => [0, RY[2] + 10.5, 0], keys: ['head'], minPh: { head: 7 }, hot: true },
-  // row 3: the weights, then the sum
+  // row 3: the weights, then the sum. The model keeps one row of 576 weights per number of a question block; this
+  // row makes number 2p. Row 4 makes its partner, number 2p + 1 (numbers are turned in pairs: 0 with 1, 2 with 3, …).
   { t: 'after the multipliers', p: () => [XL, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 } },
-  { t: '', p: () => [XR, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, text: () => `one row of 576 weights · question block ${demoHead}` },
-  { t: 'each number × its weight', p: () => [0, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, hot: true },
-  { t: '', p: () => [9, SUMY, 0], keys: ['head'], minPh: { head: 11 }, maxPh: { head: 11 }, hot: true, side: true, text: () => sumText() },
-  { t: 'the pair as an arrow · grey before, pink after the turn', p: () => [DIALX, SY + DIALR + 2.5, 0], keys: ['head'], minPh: { head: 12 }, maxPh: { head: 12 }, hot: true },
-  { t: '', p: () => [LANDX, SY + 5.5, 0], keys: ['head'], minPh: { head: 13 }, hot: true, text: () => `lands in question block ${demoHead}` },
+  { t: '', p: () => [XR, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, text: () => (W && tr ? `weights for number ${qNum(0)} · row ${qNum(0)} of the table` : '') },
+  { t: '', p: () => [0, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, hot: true, text: () => (W && tr ? `each number × its weight for number ${qNum(0)}` : '') },
+  { t: '', p: () => [9, SUMY, 0], keys: ['head'], minPh: { head: 11 }, maxPh: { head: 12 }, hot: true, side: true, text: () => sumText() },
+  // the weight table and its lifter: captioned only while the camera is there, so they never crowd the rows' captions
+  { t: '', p: () => [WTX - 16, WTY0 + 2.4, 0], keys: ['head'], minPh: { head: 9 }, side: true, text: () => (atTable() ? `the weight table of layer 1 · question block ${demoHead}: 64 rows of 576 weights, one row per number` : '') },
+  { t: '', p: () => [WTX + 17, wtY(qNum(0)), 0], keys: ['head'], minPh: { head: 9 }, hot: true, side: true,
+    text: () => (!W || !tr || !atTable() ? '' : phase >= 12 ? `row ${qNum(1)} → makes number ${qNum(1)}, the partner of number ${qNum(0)}` : `row ${qNum(0)} → makes number ${qNum(0)}`) },
+  { t: '', p: () => [WTX - 16, MTY + 2.2, 0], keys: ['head'], minPh: { head: 7 }, side: true, text: () => (atTable() ? 'the multiplier row of layer 1 · 576 multipliers, loaded from the model · the same for every token' : '') },
+  { t: '', p: () => [DUDEX, DUDEY - 1.8, 0], keys: ['head'], minPh: { head: 7 }, text: () => (atTable() ? 'he lifts them · we multiply by them' : '') },
+  // the fold: an empty grid in a board's layout, then the row's values fill it in order; the corners say which value
+  // goes where
+  { t: '', p: () => [WTX, foldY(stageK()) - 12.8, 5], keys: ['head'], minPh: { head: 7 }, hot: true,
+    text: () => (stageTag() === 'grid' ? 'empty slots in the layout of every board: 32 to a line, 18 lines'
+      : stageTag() === 'fold' ? 'the values fill them in order: 0–31 make line 1, 32–63 line 2, … 544–575 line 18' : '') },
+  ...FOLD_MARKS.map(i => ({ t: '', p: () => { const q = foldPos(i, stageK()); return [q[0] + (i % 32 ? 2.2 : -2.2), q[1], q[2]]; }, keys: ['head'], minPh: { head: 7 }, hot: true,
+    text: () => (['grid', 'fold'].includes(stageTag()) ? `value ${i}` : '') })),
+  // the match: same place on both boards, same pair; captioned under the row
+  { t: '', p: () => [rowX(stageK()), rowY(stageK()) - 11.8, 0], keys: ['head'], minPh: { head: 1 }, hot: true, text: () => matchText() },
+  // row 4: the partner, to the right of row 3: the same numbers with the weights for the next number; then the pair
+  { t: 'the same numbers', p: () => [XL + R4X, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 12 } },
+  { t: '', p: () => [XL - 16, RY[3] - 12, 0], keys: ['head'], minPh: { head: 12 }, maxPh: { head: 12 }, hot: true, side: true,
+    text: () => (stageTag() === 'copy' ? 'copied from here for the partner' : '') },
+  { t: '', p: () => [XR + R4X, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 12 }, text: () => (W && tr ? `weights for number ${qNum(1)} · row ${qNum(1)} of the table` : '') },
+  { t: '', p: () => [R4X, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 12 }, hot: true, text: () => (W && tr ? `each number × its weight for number ${qNum(1)}` : '') },
+  { t: '', p: () => (nsMode() === 'pair' ? [PX + 10, SUMY, 0] : [R4X + 5.8, SUMY, 0]), keys: ['head'], minPh: { head: 12 }, maxPh: { head: 12 }, hot: true, side: true, text: () => partnerText() },
+  // the turn: the card beside the dial says what each stage shows; small captions name what is on the dial itself
+  { t: '', p: () => [PX - 3.4, SY, 0], keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 }, hot: true, card: true, html: () => turnCard() },
+  { t: '', p: () => [DIALX, SY + DIALR + 4.6, 0], keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 }, hot: true,
+    text: () => (isTurn(phase) ? TURN_NAMES[phase - TURN0] : '') },
+  { t: 'along →', p: () => [DIALX + DIALR + 2.7, SY, 0], keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 }, side: true },
+  { t: 'up ↑', p: () => [DIALX, SY + DIALR + 2.9, 0], keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 } },
+  { t: '', p: turnPt(d => { const ti = turnInfo(d); return [DIALX + d.a * ti.sc * 1.12, SY + d.b * ti.sc * 1.12 + 0.6, 0.5]; }),
+    keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 },
+    text: () => (W && tr && turnFrom('arrow') && !turnFrom('rotate') ? `(${f3(headDemo(layer, tok, demoHead).a)}, ${f3(headDemo(layer, tok, demoHead).b)})` : '') },
+  { t: '', p: turnPt(d => { const ti = turnInfo(d), th = turnTheta(d, ti); return [DIALX + DIALR * 1.15 * Math.cos(th), SY + DIALR * 1.15 * Math.sin(th) + 0.6, 0.5]; }),
+    keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 }, hot: true,
+    text: () => { if (!W || !tr || !turnFrom('rotate')) return ''; const d = headDemo(layer, tok, demoHead), ti = turnInfo(d), th = turnTheta(d, ti);
+      return `(${f3(ti.L * Math.cos(th))}, ${f3(ti.L * Math.sin(th))})`; } },
+  // the ticks: places 0-5 of the text, and the token's own place
+  ...Array.from({ length: 7 }, (_, j) => ({ t: '', keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 },
+    p: turnPt(d => { const ti = turnInfo(d), q = j < 6 ? j : tok, a = ti.from + q * ti.sp; return [DIALX + (DIALR + 2) * Math.cos(a), SY + (DIALR + 2) * Math.sin(a) - 0.4, 0.5]; }),
+    text: () => (!W || !tr || !turnFrom('why') ? '' : j < 6 ? (j < tr.T && j !== tok ? String(j) : '') : `“${showTok(tr.h.tokens[tok])}” · place ${tok}`) })),
+  // cos and sin: c along the bottom, s up the side
+  { t: '', p: turnPt(d => [DIALX + (DIALR * Math.cos(turnInfo(d).rest)) / 2, SY - 1.1, 0.5]), keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 },
+    text: () => (W && curTurnTag() === 'cs' ? `c = ${turnInfo(headDemo(layer, tok, demoHead)).c.toFixed(3)}` : '') },
+  { t: '', p: turnPt(d => { const ti = turnInfo(d); return [DIALX + DIALR * Math.cos(ti.rest) + 0.6, SY + (DIALR * Math.sin(ti.rest)) / 2, 0.5]; }), keys: ['head'], minPh: { head: TURN0 }, maxPh: { head: LANDP - 1 }, side: true,
+    text: () => (W && curTurnTag() === 'cs' ? `s = ${turnInfo(headDemo(layer, tok, demoHead)).s.toFixed(3)}` : '') },
+  { t: '', p: () => [LANDX, SY + 5.5, 0], keys: ['head'], minPh: { head: LANDP }, hot: true, text: () => `lands in question block ${demoHead}` },
   { t: 'the stream', p: () => [DX, 10.5, 0], keys: ['add', 'dock'] },
   { t: 'the stream', p: () => [GX, 10.5, 0], keys: ['down'] },
   { t: 'questions · 9 heads × 64', p: () => [BX, 15.5, 0], keys: ['qkv', 'attend', 'headsout'] },
@@ -535,10 +816,14 @@ const LABELS = [
   { t: 'detectors · 48 blocks of 32', p: () => [FX, 13, 0], keys: ['dock', 'down'] },
   { t: 'their answer · 576', p: () => [GX, -10, 2], keys: ['down'] },
 ];
-for (const L of LABELS) { L.el = document.createElement('div'); L.el.className = 'lbl' + (L.hot ? ' hot' : '') + (L.side ? ' side' : ''); L.el.textContent = L.t; $('#labels').appendChild(L.el); }
+for (const L of LABELS) { L.el = document.createElement('div'); L.el.className = 'lbl' + (L.hot ? ' hot' : '') + (L.side ? ' side' : '') + (L.rside ? ' rside' : '') + (L.card ? ' card' : ''); L.el.textContent = L.t; $('#labels').appendChild(L.el); }
 
 // The inside-a-head arithmetic, done here from the weights file and checked against the recorded trace.
 function wrow(name, idx, n) { const arr = W.a[name], s = W.a[name + '_scale'][idx], o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = arr[idx * n + i] * s; return o; }
+// Which number of the question block the demo makes: k = 0 the first of the pair (2p), k = 1 its partner (2p + 1).
+function qNum(k) { return 2 * headDemo(layer, tok, demoHead).p + k; }
+// The camera is at the weight table: a row lighting up, its weights appearing, the row pulled out.
+function atTable() { return ['table', 'row', 'lift'].includes(stageTag()); }
 function headDemo(l, t, h) {
   const m = W.h.model, x = deq('resid', l, t, 576);
   let ms = 0; for (const v of x) ms += v * v; ms /= 576;
@@ -546,23 +831,45 @@ function headDemo(l, t, h) {
   const n = x.map((v, i) => v * factor * g[i]);
   const pi = (l * 9 + h) * 4 + demoPair, p = W.a.pair[pi];        // weights file: 4 pairs per head
   const wa = wrow('wq', pi * 2, 576), wb = wrow('wq', pi * 2 + 1, 576);
-  const pa = n.map((v, i) => v * wa[i]);
+  const pa = n.map((v, i) => v * wa[i]), pb = n.map((v, i) => v * wb[i]);    // pb: the partner's 576 parts
   let a = 0, b = 0, imax = 0;
-  for (let i = 0; i < 576; i++) { a += pa[i]; b += n[i] * wb[i]; if (Math.abs(pa[i]) > Math.abs(pa[imax])) imax = i; }
+  for (let i = 0; i < 576; i++) { a += pa[i]; b += pb[i]; if (Math.abs(pa[i]) > Math.abs(pa[imax])) imax = i; }
   const ang = t * Math.pow(m.rope_base, (-2 * p) / m.HD), c = Math.cos(ang), s = Math.sin(ang);
   const rec = deq('q', l, t, 64, h, 9);
   return { x, factor, sq: x.map(v => v * v), ss: ms * 576, ms, rt: Math.sqrt(ms + m.eps), eps: m.eps,
-    xf: x.map(v => v * factor), g, n, p, wa, pa, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
+    xf: x.map(v => v * factor), g, n, p, wa, pa, wb, pb, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
 }
 
 // Captions for the volume-knob column and the sum; while a stage runs they follow it (stage tags, see headScript).
 const counting = () => merge && merge.n < 576;
 const stageTag = () => (play && !play.done && play.s === step ? play.stages[play.i].tag || null : null);
 const stageU = () => (play && !play.done ? Math.min(1, Math.max(0, (vnow() - play.t0) / Math.max(1, play.stages[play.i].ms))) : 1);
+const stageSub = () => (play && !play.done && play.s === step ? play.stages[play.i].sub : null);
+// the prompt as one line of text, as it goes into the tokenizer
+function promptText() { const s = tr.h.tokens.join('').replace(/\n+/g, ' ↵ ').replace(/\s+/g, ' ').trim(); return s.length > 46 ? s.slice(0, 45) + '…' : s; }
+const stageK = () => { const s = stageSub(); return s && s.k != null ? s.k : 3; };
+function matchText() {
+  if (stageTag() !== 'match') return '';
+  const right = ['its twin', 'the knob', 'its multiplier', 'its weight', 'its weight'][stageK()];
+  return `same place, same pair: 0 with 0, 1 with 1, … 575 with 575 · each number meets ${right} at its own place`;
+}
 const nPieces = d => Math.max(1, Math.min(40, Math.ceil(d.factor - 1e-9)));   // pieces of the root laid along the "1"
+// RS: 0 the ruler "1", 1-40 the pieces, 41 the square's side (and the cut), 42 the cut-off overhang, 43.. its bits
+const rnd = (q, k) => { const v = Math.sin(q * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
+// The last root laid along the "1" sticks out past its end (x = 5). That overhang is cut off there and crumbles into
+// BITS small bits (4 × 3 × 2) that fall away. chipAt(gap): the overhang in place (0) or moved off the cut (1).
+function chipBits(d) {
+  const seg = 10 * d.rt, N = nPieces(d), over = Math.max(0, N * seg - 10), col = (N - 1) % 2 ? PIECE_B : HOLD;
+  const chipAt = gap => [5 + over / 2 + gap * 0.5, RULY - gap * 0.35, 0.85];
+  const home = q => { const c = chipAt(1), qx = q % 4, qy = Math.floor(q / 4) % 3, qz = Math.floor(q / 12);
+    return [c[0] + ((qx + 0.5) / 4 - 0.5) * over, c[1] + ((qy + 0.5) / 3 - 0.5) * 0.75, c[2] + ((qz + 0.5) / 2 - 0.5) * 0.75]; };
+  const fallen = q => { const h = home(q); return [h[0] + (rnd(q, 1) - 0.3) * 1.5, h[1] - 2.5 - rnd(q, 2) * 2.5, h[2] + (rnd(q, 3) - 0.5) * 1.5]; };
+  return { over, col, chipAt, chipS: [over * 0.94, 0.75, 0.75], home, fallen, bitS: [(over / 4) * 0.9, 0.22, 0.33] };
+}
 function chainText(lv) {
   if (!W || !tr) return '';
   const d = headDemo(layer, tok, demoHead), tag = stageTag(), ss = fmtH(d.ss), ms = fmtH(d.ms), rt = fmtH(d.rt), k = d.factor.toFixed(3);
+  const whole = Math.floor(d.factor), part = (d.factor - whole).toFixed(3);
   if (lv === 0) {
     if (phase === 2) return counting() ? `adding up the squares: ${merge.n} of 576 · so far ${fmtH(merge.cum[merge.n])}` : `all 576 squares added = ${ss}`;
     if (tag === 'count') return `counting the squares: ${glow ? glow.n : 576}`;
@@ -570,13 +877,13 @@ function chainText(lv) {
     return `${ss} ÷ 576 = ${ms}: the average square`;
   }
   if (lv === 1) {
-    if (tag === 'area') return `picture ${ms} as the area of a square`;
+    if (tag === 'area') return `picture ${ms} (plus a tiny safety number, ${Number(d.eps.toPrecision(2))}) as the area of a square`;
     if (tag === 'side') return `its side is ${rt}, because ${rt} × ${rt} = ${ms}`;
     return phase >= 4 && tag !== 'hit' && tag !== 'count' ? `√${ms} = ${rt}: the side of that square` : '';
   }
   if (lv === 2) {
     if (phase < 5) return '';
-    return tag === 'one' || tag === 'ruler' || tag === 'fit' ? `1 ÷ ${rt}: how many ${rt}s fit into 1?` : `1 ÷ ${rt}`;
+    return ['one', 'ruler', 'fit', 'over', 'cut', 'crumble'].includes(tag) ? `1 ÷ ${rt}: how many ${rt}s fit into 1?` : `1 ÷ ${rt}`;
   }
   if (lv === 3) {
     if (phase < 5 || tag === 'one') return '';
@@ -585,43 +892,65 @@ function chainText(lv) {
       const N = nPieces(d), u = stageU(), got = Math.max(0, Math.min(N, Math.floor(((u - STAG_W) / (1 - STAG_W)) * Math.max(N - 1, 1)) + 1));
       return `laying ${rt}s along it: ${got}`;
     }
-    return `${rt} fits ${k} times into 1: ${Math.floor(d.factor)} whole, plus ${(d.factor - Math.floor(d.factor)).toFixed(3)} of one`;
+    if (tag === 'over') return `the last ${rt} sticks out past the end of the 1`;
+    if (tag === 'cut') return 'cut it off where the 1 ends';
+    if (tag === 'crumble') return `what sticks out does not count: ${whole} whole, plus ${part} of one`;
+    return `${rt} fits ${k} times into 1: ${whole} whole, plus ${part} of one`;
   }
-  if (phase < 5 || tag === 'one' || tag === 'ruler' || tag === 'fit') return '';
+  if (phase < 5 || ['one', 'ruler', 'fit', 'over', 'cut', 'crumble'].includes(tag)) return '';
   return phase === 6 ? `the knob: every number × ${k}` : `= ${k}: the volume knob`;
+}
+// Which state the partner part (12) is in: 'one' (only the first sum, row 4 at work) · 'sum' (both sums) · 'pair'.
+function nsMode() {
+  const st = play && !play.done && play.s === step && play.ph === phase ? play.stages[play.i] : null;
+  if (!st || st.hold || !st.sub) return 'pair';
+  return st.sub.ns || (st.sub.k === 4 ? 'one' : 'pair');
 }
 function sumText() {
   if (!W || !tr) return '';
   const d = headDemo(layer, tok, demoHead);
-  return counting() ? `adding up the 576 parts: ${merge.n} of 576 · so far ${f3(merge.cum[merge.n])}`
-    : `all 576 added = ${f3(d.a)} · beside it: its partner, same recipe = ${f3(d.b)}`;
+  if (phase === 12) return nsMode() === 'pair' ? '' : `all 576 added = ${f3(d.a)}`;
+  return counting() ? `adding up the 576 parts: ${merge.n} of 576 · so far ${f3(merge.cum[merge.n])}` : `all 576 added = ${f3(d.a)}`;
+}
+function partnerText() {
+  if (!W || !tr) return '';
+  const d = headDemo(layer, tok, demoHead), mode = nsMode();
+  if (mode === 'one') return '';
+  if (counting()) return `adding up the partner's 576 parts: ${merge.n} of 576 · so far ${f3(merge.cum[merge.n])}`;
+  if (mode === 'sum') return `all 576 added = ${f3(d.b)}: the partner`;
+  return `the pair: ${f3(d.a)} and its partner ${f3(d.b)} · these two are turned together`;
 }
 
-
 // ---------- inside a head: the scene ----------
-// Four multiply rows. Each: left board × right board, pair by pair, in the slots between them; products stay there.
-const ROW_PH = [[1, 1], [6, 6], [7, 8], [9, 10]];       // [part that sets the row up, part that multiplies it]
+// Five multiply rows. Each: left board × right board, pair by pair, in the slots between them; products stay there.
+// Row 4 is the partner: row 3's left board again, with the weights that make the partner number (2p + 1).
+const ROW_PH = [[1, 1], [6, 6], [7, 8], [9, 10], [12, 12]];       // [part that sets the row up, part that multiplies it]
 const rowValues = d => [
   { A: d.x, B: d.x, P: d.sq }, { A: d.x, B: new Float32Array(576).fill(d.factor), P: d.xf },
-  { A: d.xf, B: d.g, P: d.n }, { A: d.n, B: d.wa, P: d.pa }];
+  { A: d.xf, B: d.g, P: d.n }, { A: d.n, B: d.wa, P: d.pa }, { A: d.n, B: d.wb, P: d.pb }];
 function rowState(k, ph) { const [a, b] = ROW_PH[k]; return ph < a ? 'hidden' : ph < b ? 'slots' : 'done'; }
 // st: hidden · split (boards placed) · slots (empty slots too) · cascade (pairs in their slots) · pop (first m popped) · done
-function drawRow(k, r, st, m, live) {
-  const y = RY[k], A = k ? G['A' + k] : null, B = G['B' + k], S = G['S' + k], P = G['P' + k];
+// hi: mark the MATCH places on both boards; showA: the left board stays shown while the row is otherwise hidden
+function drawRow(k, r, st, m, live, hi = false, showA = false) {
+  const y = rowY(k), ox = rowX(k), A = k ? G['A' + k] : null, B = G['B' + k], S = G['S' + k], P = G['P' + k];
+  const slot = (i, side = 0) => { const s = slotPos(i, y, side); s[0] += ox; return s; };
   const aS = robust(r.A) || 1, bS = robust(r.B) || 1, pS = robust(r.P) || 1;
   const vis = st !== 'hidden', slots = vis && st !== 'split', popped = st === 'done' ? 576 : st === 'pop' ? m : 0;
   const paired = st === 'cascade' || st === 'pop';
   for (let i = 0; i < 576; i++) {
-    if (A) { if (vis) barSet(A, i, gridPos(i, XL, y), r.A[i], aS); else A.set(i, gridPos(i, XL, y), 0, null); }
-    if (vis) barSet(B, i, gridPos(i, XR, y), r.B[i], bS); else B.set(i, gridPos(i, XR, y), 0, null);
-    const sp = slotPos(i, y);
+    const mc = hi && MATCH.includes(i) ? SEL : null;
+    if (A) { if (vis || showA) barSet(A, i, gridPos(i, XL + ox, y), r.A[i], aS, mc); else A.set(i, gridPos(i, XL + ox, y), 0, null); }
+    if (vis) barSet(B, i, gridPos(i, XR + ox, y), r.B[i], bS, mc); else B.set(i, gridPos(i, XR + ox, y), 0, null);
+    const sp = slot(i);
     S.set(i, [sp[0], sp[1], -0.5], slots ? [2.0, 0.92, 0.12] : 0, FRAME);
     const done = i < popped;
-    P.set(i, sp, done ? 1 : 0, done ? valColor(r.P[i] / pS) : SEL);     // a product is born white, then takes its colour
+    // a product is born white and flat, then grows into its bar (toward you if positive, into the screen if negative)
+    if (done) barSet(P, i, sp, r.P[i], pS); else P.set(i, sp, 0, SEL);
     if (live && paired) {
-      // the pair waits in the two halves of its slot; popping squashes it into the middle, where the product appears
+      // the pair waits in the two halves of its slot, each still a bar of its own size; popping squashes it into the
+      // middle, where the product appears
       if (done) { G.SA.set(i, sp, 0, null); G.SB.set(i, sp, 0, null); }
-      else { G.SA.set(i, slotPos(i, y, -1), 1, valColor(r.A[i] / aS)); G.SB.set(i, slotPos(i, y, 1), 1, valColor(r.B[i] / bS)); }
+      else { barSet(G.SA, i, slot(i, -1), r.A[i], aS); barSet(G.SB, i, slot(i, 1), r.B[i], bS); }
     }
   }
   if (A) A.vals.set(r.A);
@@ -630,9 +959,20 @@ function drawRow(k, r, st, m, live) {
 }
 function headScene(d, ph, sub) {
   const segs = [], rows = rowValues(d);
-  for (let k = 0; k < 4; k++) {
+  for (let k = 0; k < 5; k++) {
     const live = !!sub && sub.k === k;
-    drawRow(k, rows[k], live ? sub.st : rowState(k, ph), live ? sub.m || 0 : 0, live);
+    drawRow(k, rows[k], live ? sub.st : rowState(k, ph), live ? sub.m || 0 : 0, live, live && !!sub.match, live && !!sub.keepA);
+  }
+  // the partner's numbers: a copy lifts off row 3's left board (copy 'up'), then travels in front of the other boards
+  // to row 4's left board (copy 'over'), where it settles (keepA)
+  if (sub && sub.copy) {
+    const r4 = rows[4], aS = robust(r4.A) || 1, x = sub.copy === 'up' ? XL : XL + R4X;
+    for (let i = 0; i < 576; i++) { barSet(G.A4, i, gridPos(i, x, RY[3]), r4.A[i], aS); G.A4.to.p[i * 3 + 2] += 7; }
+  }
+  if (sub && sub.match) {   // a link from each marked place on the left board to the same place on the right board
+    const k = sub.k, y = rowY(k), ox = rowX(k);
+    if (k === 0) { const sc = robust(d.x) || 1; for (const i of MATCH) barSet(G.R, i, residPos(i, XL), d.x[i], sc, SEL); }
+    for (const i of MATCH) segs.push({ a: gridPos(i, XL + ox, y, 1.5), b: gridPos(i, XR + ox, y, 1.5), c: SEL, alpha: 0.9, bulge: 14 });
   }
   if (sub && sub.fly) for (let i = 0; i < 576; i++) G.SA.set(i, sub.fly, 0, null);   // copies flying into a holder
   // The volume-knob column, centred under the squares at levels CY. c says what is on screen at the end of this part;
@@ -648,32 +988,65 @@ function headScene(d, ph, sub) {
   G.CH.set(4, [-2.2, CY[2], 1], c.one ? 3.6 : 0, HOLD);
   G.CH.set(5, [0, CY[3], 1], c.knob ? 3.6 : 0, HOLD);
   G.CH.vals.set([d.ss, 576, d.ms, d.rt, 1, d.factor]);
-  // 1 ÷ root as "how many roots fit into 1": the 1 is a bar 10 long, the pieces are the root's length on that scale
+  // 1 ÷ root as "how many roots fit into 1": the 1 is a bar 10 long, the pieces are the root's length on that scale.
+  // pieces: 'full' all whole (the last sticks out past the end) · 'cut' the overhang cut off beside it · true kept part
   G.RS.set(0, [0, RULY, 0.4], c.ruler ? [10, 0.45, 0.45] : 0, RULER);
-  const seg = 10 * d.rt, N = nPieces(d);
+  const seg = 10 * d.rt, N = nPieces(d), cb = chipBits(d);
   for (let j = 0; j < 40; j++) {
-    const at = j * seg, len = Math.max(0.05, Math.min(seg, 10 - at));
+    const at = j * seg, len = c.pieces === 'full' ? seg : Math.max(0.05, Math.min(seg, 10 - at));
     G.RS.set(1 + j, [-5 + at + len / 2, RULY, 0.85], c.pieces && j < N ? [len * 0.94, 0.75, 0.75] : 0, j % 2 ? PIECE_B : HOLD);
   }
-  // the side of the square: lit along the bottom edge, then dropping down to become the root
-  G.RS.set(41, c.edge === 'drop' ? [0, CY[2], 1] : [0, CY[1] - 2.5, 0.6], c.edge === 'show' ? [5, 0.35, 0.35] : 0, SIDE);
-  // the sum and its partner (centred under row 3), then the turn, then the landing
-  const sumScale = Math.max(Math.abs(d.a), Math.abs(d.b), Math.abs(d.qa), Math.abs(d.qb)) || 1, hold = [0, SUMY, 1];
-  if (ph === 11) {
-    G.NS.set(0, hold, 3.6, HOLD); G.NS.set(1, [4.4, SUMY, 1], 2.6, valColor(d.b / sumScale));
-    G.NS.vals[0] = d.a; G.NS.vals[1] = d.b;
-  } else if (ph === 12) {
-    G.NS.set(0, [-1.2, SY, 0], 1.8, valColor(d.qa / sumScale)); G.NS.set(1, [1.2, SY, 0], 1.8, valColor(d.qb / sumScale));
-    G.NS.vals[0] = d.qa; G.NS.vals[1] = d.qb;
-  } else if (ph === 13) {
+  G.RS.set(42, cb.chipAt(1), c.pieces === 'cut' && cb.over > 0.01 ? cb.chipS : 0, cb.col);
+  for (let q = 0; q < BITS; q++) G.RS.set(43 + q, c.crumble ? cb.fallen(q) : cb.home(q), 0, cb.col);
+  // the side of the square: lit along the bottom edge, then dropping down to become the root; in 1 ÷ root, the cut
+  if (c.blade) G.RS.set(41, [5, RULY, 0.9], [0.12, 2.0, 1.2], SIDE);
+  else G.RS.set(41, c.edge === 'drop' ? [0, CY[2], 1] : [0, CY[1] - 2.5, 0.6], c.edge === 'show' ? [5, 0.35, 0.35] : 0, SIDE);
+  // the weight table: the question block's 64 rows; row 2p lit from "the weights" on, row 2p + 1 from "the partner".
+  // The multiplier row above it, from "the multipliers" on. A stage can show a row's 576 values as a strip along its
+  // slab (sub.strip = the multiply row they are for: 2 multipliers, 3 or 4 weights), pulled out toward the viewer
+  // (sub.lifted); from there they fly to that row's right board.
+  const wt = sub && sub.wt ? sub.wt : ph >= 12 ? 2 : ph >= 9 ? 1 : 0;
+  for (let r = 0; r < 64; r++) {
+    const lit = (r === 2 * d.p && wt >= 1) || (r === 2 * d.p + 1 && wt >= 2);
+    G.WT.set(r, [WTX, wtY(r), 0], wt ? [32, 0.4, 1.0] : 0, lit ? DOCK : SLAB);
+  }
+  G.MT.set(0, [WTX, MTY, 0], ph >= 7 || (sub && sub.k === 2) ? [32, 0.4, 1.0] : 0, DOCK);
+  if (sub && sub.strip) {
+    const k = sub.strip, Bk = G['B' + k], y = k === 2 ? MTY : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), vs = rows[k].B, bS = robust(vs) || 1;
+    for (let i = 0; i < 576; i++) Bk.set(i, stripPos(i, y, sub.lifted ? 3 : 0.8), [SLIVER, 0.45, 0.45], valColor(vs[i] / bS));
+  }
+  // the fold: first an empty grid of slots in a board's layout (sub.grid), then the row's values fill it in order
+  // (sub.fold); the slots stay under them until the values fly off to the right board
+  const fk = sub && (sub.fold || sub.grid), fslots = !!fk;
+  for (let i = 0; i < 576; i++) { const q = foldPos(i, fk || (ph <= 8 ? 2 : 3)); G.FS.set(i, [q[0], q[1], q[2] - 0.5], fslots ? [0.92, 0.92, 0.12] : 0, FRAME); }
+  if (sub && sub.fold) {
+    const k = sub.fold, Bk = G['B' + k], vs = rows[k].B, bS = robust(vs) || 1;
+    for (let i = 0; i < 576; i++) Bk.set(i, foldPos(i, k), 0.8, valColor(vs[i] / bS));
+  }
+  // the sum (centred under row 3); its partner's sum under row 4, to the right; the two meet halfway (PX) as the pair;
+  // then the turn, then the landing
+  const sumScale = Math.max(Math.abs(d.a), Math.abs(d.b), Math.abs(d.qa), Math.abs(d.qb)) || 1, hold = [0, SUMY, 1], phold = [R4X, SUMY, 1];
+  G.NS.vals[0] = d.a; G.NS.vals[1] = d.b;
+  if (ph === 11) { G.NS.set(0, hold, 3.6, HOLD); G.NS.set(1, phold, 0, HOLD); }
+  else if (ph === 12) {
+    const mode = sub && sub.ns ? sub.ns : sub && sub.k === 4 ? 'one' : 'pair';
+    if (mode === 'pair') { G.NS.set(0, [PX - 2.2, SUMY, 1], 3.6, HOLD); G.NS.set(1, [PX + 2.2, SUMY, 1], 3.6, HOLD); }
+    else { G.NS.set(0, hold, 3.6, HOLD); G.NS.set(1, phold, mode === 'sum' ? 3.6 : 0, HOLD); }
+  } else if (isTurn(ph)) {
+    // beside the dial: the pair as it is, until the last stage of "cos and sin" works out the turned pair
+    const turned = TURN_TAGS.indexOf(turnTag(ph, sub)) >= TURN_TAGS.indexOf('sum'), va = turned ? d.qa : d.a, vb = turned ? d.qb : d.b;
+    G.NS.set(0, [PX - 1.2, SY, 0], 1.8, valColor(va / sumScale)); G.NS.set(1, [PX + 1.2, SY, 0], 1.8, valColor(vb / sumScale));
+    G.NS.vals[0] = va; G.NS.vals[1] = vb;
+  } else if (ph === LANDP) {
     G.NS.set(0, landCell(2 * d.p), 1.15, valColor(d.qa / sumScale)); G.NS.set(1, landCell(2 * d.p + 1), 1.15, valColor(d.qb / sumScale));
     G.NS.vals[0] = d.qa; G.NS.vals[1] = d.qb;
-  } else { G.NS.set(0, hold, 0, null); G.NS.set(1, hold, 0, null); }
-  if (ph === 12) segs.push(...dialSegs(d));
+  } else { G.NS.set(0, hold, 0, null); G.NS.set(1, phold, 0, null); }
+  if (isTurn(ph)) segs.push(...turnSegs(d, turnTag(ph, sub), 1));
   return segs;
 }
 const curPos = (g, i) => [g.cur.p[i * 3], g.cur.p[i * 3 + 1], g.cur.p[i * 3 + 2]];
 function setCur(g, i, p, s) { for (let a = 0; a < 3; a++) { g.cur.p[i * 3 + a] = p[a]; g.cur.s[i * 3 + a] = s; } }
+function setCurC(g, i, p, s, c) { for (let a = 0; a < 3; a++) { g.cur.p[i * 3 + a] = p[a]; g.cur.s[i * 3 + a] = s[a]; g.cur.c[i * 3 + a] = c[a]; } }
 // A part as a sequence of stages, played when stepping forward into it. Each stage: { ms, sub (scene), pre (spawns,
 // before the move starts), stag/back (per group name), cam, camMs, merge [group, idx, values], glow (group counted),
 // tag (what the captions say during it) }.
@@ -685,8 +1058,25 @@ function headScript(ph) {
     add(1000, { k, st: 'split' }, { pre, cam: rowView(k) });                  // the boards move into place
     add(800, { k, st: 'slots' }, { stag: { ['S' + k]: STAG_DIAG } });           // the empty pair slots appear
   };
+  // To a table: the row this board comes from lights up (the multiplier row for row 2, a weight-table row for rows 3
+  // and 4), its 576 values appear along it, and it is pulled out toward the viewer; the next stage (setup) flies them
+  // to the multiply row's right board. Nothing on a board appears from nowhere: it is loaded from here, or computed.
+  // x: extra scene flags for every stage (row 4 keeps its already-copied left board shown: keepA)
+  const fromTable = (k, x = {}) => {
+    const wt = k === 3 ? 1 : k === 4 ? 2 : 0, y = k === 2 ? MTY : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), Bn = 'B' + k;
+    add(1300, { k, st: 'hidden', wt, ...x }, { cam: k === 2 ? MTCAM : WTCAM, camMs: 1200, tag: 'table' });
+    add(1100, { k, st: 'hidden', wt, strip: k, ...x }, { pre: () => { for (let i = 0; i < 576; i++) setCur(G[Bn], i, stripPos(i, y, 0.8), 0); }, stag: { [Bn]: STAG }, tag: 'row' });
+    add(800, { k, st: 'hidden', wt, strip: k, lifted: true, ...x }, { tag: 'lift' });
+    // the fold: an empty grid of 18 lines of 32 slots appears, the layout every board uses; then the row's values
+    // leave it one by one, in order, and fill the slots line by line, so it lands on the right board shape for shape
+    add(1000, { k, st: 'hidden', wt, strip: k, lifted: true, grid: k, ...x }, { cam: FOLDCAM(k), camMs: 900, stag: { FS: STAG_DIAG }, tag: 'grid' });
+    add(3400, { k, st: 'hidden', wt, fold: k, grid: k, ...x }, { stag: { [Bn]: STAG }, tag: 'fold' });
+  };
+  // the match: a number on the left board and the value at the same place on the right board belong together
+  const match = k => add(2600, { k, st: 'slots', match: true }, { tag: 'match' });
   const multiply = k => {
     const P = 'P' + k, src = k ? G['A' + k] : G.R;
+    match(k);
     add(2600, { k, st: 'cascade' }, { pre: () => { copyCur(G.SA, src); copyCur(G.SB, G['B' + k]); }, stag: { SA: STAG, SB: STAG } });
     const s0 = slotPos(0, RY[k]);
     add(900, { k, st: 'pop', m: 0 }, { cam: [s0[0] + 0.6, 9, s0[1] - 0.5, 6] });   // zoom in on the top-left slot
@@ -699,7 +1089,8 @@ function headScript(ph) {
     add(1000, { k, st: 'pop', m: 28 }, { cam: rowView(k) });                      // zoom out
     add(1500, { k, st: 'pop', m: 576 }, { back: [P], stag: { SA: STAG_DIAG, SB: STAG_DIAG, [P]: STAG_DIAG } });   // the rest at once
   };
-  const N = nPieces(d), stagPieces = Float32Array.from({ length: 42 }, (_, j) => (j >= 1 && j <= N ? ((j - 1) / Math.max(N - 1, 1)) * (1 - STAG_W) : 0));
+  const N = nPieces(d), stagPieces = Float32Array.from({ length: RS_N }, (_, j) => (j >= 1 && j <= N ? ((j - 1) / Math.max(N - 1, 1)) * (1 - STAG_W) : 0));
+  const stagBits = Float32Array.from({ length: RS_N }, (_, j) => (j >= 43 ? rnd(j, 4) * (1 - STAG_W) : 0));   // bits fall off one by one
   switch (ph) {
     case 1: setup(0, () => copyCur(G.B0, G.R)); multiply(0); break;              // the stream splits in two: itself and a twin
     case 2: add(MERGE_MS, { fly: [0, CY[0], 1] }, { pre: () => copyCur(G.SA, G.P0), stag: { SA: STAG }, merge: [G.CH, 0, d.sq] }); break;
@@ -713,25 +1104,125 @@ function headScript(ph) {
       add(1100, { chain: { mean: 'plate', root: false, edge: 'show' } }, { tag: 'side' });
       add(1100, { chain: { edge: 'drop' } }, { pre: () => setCur(G.CH, 3, [0, CY[1] - 2.5, 1], 0.4), back: ['CH'], tag: 'born' });
       break;
-    case 5:   // 1 ÷ root: a 1 slides in, becomes a bar 1 long, and pieces of the root's length are laid along it
+    case 5:   // 1 ÷ root: a 1 slides in, becomes a bar 1 long, and pieces of the root's length are laid along it;
+              // the last one sticks out past the end, is cut off there, and the cut-off part crumbles away
       add(1000, { chain: { ruler: false, pieces: false, knob: false } }, { pre: () => setCur(G.CH, 4, [-14, CY[2], 1], 3.6), tag: 'one' });
       add(900, { chain: { pieces: false, knob: false } }, { pre: () => setCur(G.RS, 0, curPos(G.CH, 4), 0.5), tag: 'ruler' });
-      add(2800, { chain: { knob: false } }, { pre: () => { const p = curPos(G.CH, 3); for (let j = 1; j <= 40; j++) setCur(G.RS, j, p, 0.3); }, stag: { RS: stagPieces }, tag: 'fit' });
-      add(1000, { chain: {} }, { pre: () => setCur(G.CH, 5, [0, RULY, 1], 0.4), back: ['CH'], tag: 'born' });
+      add(2800, { chain: { knob: false, pieces: 'full' } }, { pre: () => { const p = curPos(G.CH, 3); for (let j = 1; j <= 40; j++) setCur(G.RS, j, p, 0.3); }, stag: { RS: stagPieces }, tag: 'fit' });
+      add(900, { chain: { knob: false, pieces: 'full' } }, { cam: CUTCAM, camMs: 900, tag: 'over' });   // close up on the end of the 1
+      add(1100, { chain: { knob: false, pieces: 'cut', blade: true } }, { pre: () => {
+        const b = chipBits(d); setCur(G.RS, 41, [5, RULY + 2, 0.9], 0); setCurC(G.RS, 42, b.chipAt(0), b.chipS, b.col);
+      }, tag: 'cut' });
+      add(1800, { chain: { knob: false, crumble: true } }, { pre: () => {
+        const b = chipBits(d); setCurC(G.RS, 42, b.chipAt(1), [0, 0, 0], b.col);
+        for (let q = 0; q < BITS; q++) setCurC(G.RS, 43 + q, b.home(q), b.bitS, b.col);
+      }, stag: { RS: stagBits }, tag: 'crumble' });
+      add(1000, { chain: {} }, { pre: () => setCur(G.CH, 5, [0, RULY, 1], 0.4), back: ['CH'], cam: headCam(5), tag: 'born' });
       break;
     case 6: setup(1, () => { copyCur(G.A1, G.R); copyPoint(G.B1, G.CH, 5); }); multiply(1); break;   // the knob divides into 576
-    case 7: setup(2, () => copyCur(G.A2, G.P1)); break;
+    case 7: fromTable(2); setup(2, () => copyCur(G.A2, G.P1)); break;   // the multiplier row becomes row 2's right board
     case 8: multiply(2); break;
-    case 9: setup(3, () => copyCur(G.A3, G.P2)); break;
+    case 9: fromTable(3); setup(3, () => copyCur(G.A3, G.P2)); break;   // row 2p of the weight table becomes row 3's weights
     case 10: multiply(3); break;
     case 11: add(MERGE_MS, { fly: [0, SUMY, 1] }, { pre: () => copyCur(G.SA, G.P3), stag: { SA: STAG }, merge: [G.NS, 0, d.pa] }); break;
-    default: return null;
+    case 12:    // the partner: back to the table for row 2p + 1; row 3's numbers copied to the right meet it; same multiply,
+                // same sum; then the two sums meet halfway as the pair
+      // first the numbers: a copy of row 3's left board (the numbers after the multipliers) lifts off it and moves
+      // over the other boards to row 4; then to the table for the partner's weights
+      add(1200, { k: 4, st: 'hidden', copy: 'up' }, { pre: () => copyCur(G.A4, G.A3), cam: [14, 200, RY[3], 34], camMs: 1100, tag: 'copy' });
+      add(2200, { k: 4, st: 'hidden', copy: 'over' }, { stag: { A4: STAG_DIAG }, tag: 'copy' });
+      add(900, { k: 4, st: 'hidden', keepA: true }, { tag: 'copy' });
+      fromTable(4, { keepA: true });
+      setup(4);
+      match(4);
+      add(1600, { k: 4, st: 'cascade' }, { pre: () => { copyCur(G.SA, G.A4); copyCur(G.SB, G.B4); }, stag: { SA: STAG, SB: STAG } });
+      add(1500, { k: 4, st: 'pop', m: 576 }, { back: ['P4'], stag: { SA: STAG_DIAG, SB: STAG_DIAG, P4: STAG_DIAG } });
+      add(3200, { fly: [R4X, SUMY, 1], ns: 'sum' }, { pre: () => copyCur(G.SA, G.P4), stag: { SA: STAG }, merge: [G.NS, 1, d.pb], cam: [R4X, 82, RY[3] - 6, 36], tag: 'sum' });
+      add(1600, { ns: 'pair' }, { cam: PAIRCAM, camMs: 1400, tag: 'pair' });
+      break;
+    default:   // the turn's parts: each stage adds one thing to the dial and one paragraph to the card
+      if (!isTurn(ph)) return null;
+      for (const t of TURN_PARTS[ph - TURN0]) add(turnMs(d, t), { turn: t }, { tag: 'turn-' + t, anim: u => turnSegs(d, t, u), live: t === 'rotate' });
   }
   return S;
+}
+// The camera at animation time t: eased from camFrom to camTo over camDur. Width and height move on a log scale, so a
+// zoom from the 30 layers to one token box runs at an even pace instead of rushing through the first steps.
+function camAt(t) {
+  const k = Math.min(1, Math.max(0, (t - camT0) / camDur)), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  return camFrom.map((a, j) => (j % 2 && a > 0 && camTo[j] > 0 ? a * Math.pow(camTo[j] / a, e) : a + (camTo[j] - a) * e));
+}
+// Steps whose view is fitted to what is drawn: the camera centres on the bounding box of every visible cube and line
+// at the stage's end, and widens when they spill past the step's own frame. Labels sit above, hence the extra height.
+const FITKEYS = new Set(['in', 'qkv', 'attend', 'headsout', 'concat', 'add', 'dock', 'down']);
+function fitCam(cam, segs) {
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const take = (x, y, rx, ry) => { x0 = Math.min(x0, x - rx); x1 = Math.max(x1, x + rx); y0 = Math.min(y0, y - ry); y1 = Math.max(y1, y + ry); };
+  for (const g of Object.values(G)) {
+    const P = g.to.p, S = g.to.s;
+    for (let j = 0; j < g.n * 3; j += 3) if (S[j] > 0.01 && S[j + 1] > 0.01) take(P[j], P[j + 1], (g.size * S[j]) / 2, (g.size * S[j + 1]) / 2);
+  }
+  for (const sg of segs || []) { take(sg.a[0], sg.a[1], 0, 0); take(sg.b[0], sg.b[1], 0, 0); }
+  if (!(x1 > x0)) return cam;
+  return [(x0 + x1) / 2, Math.max(cam[1], (x1 - x0) * 1.1 + 12), (y0 + y1) / 2 + 1.5, Math.max(cam[3], (y1 - y0) * 1.1 + 6)];
+}
+// Into the stream: empty slots appear where the stream will be, then the row's 576 values leave the table one by
+// one, in order, and fill them line by line (values 0-31 the first line, 32-63 the next, ...).
+// Opens close on the start of the token's row; its first EPICK values pop up one by one, each showing its number
+// (orange positive, blue negative, darker nearer 0); the camera follows them to the first slots; then it pulls back
+// while the rest fill in.
+function embedScript(ph) {
+  if (!tr) return null;
+  if (ph < 4) return openScript(ph);
+  const y = slabY(tokSlab()), S = [];
+  S.push({ ms: 1400, sub: { pending: true, slots: true }, stag: { FS: STAG_DIAG }, cam: [EX - 10, 16, y + 1.2, 8], camMs: 1300, tag: 'ezoom' });
+  for (let j = 1; j <= EPICK; j++) S.push({ ms: 700, sub: { pending: true, slots: true, picked: j }, back: ['R'], tag: 'epick' });
+  S.push({ ms: 1200, sub: { pending: true, slots: true, picked: EPICK }, tag: 'epick' });
+  S.push({ ms: 1800, sub: { pending: true, slots: true, picked: EPICK, carried: true }, cam: [-12.5, 16, 7.5, 8], camMs: 1800, tag: 'ecarry' });
+  S.push({ ms: 3400, sub: { slots: true }, stag: { R: STAG }, cam: STEPS[SI.embed].cam(4), camMs: 1800, tag: 'efill' });
+  return S;
+}
+// The opening, before the number shower. 0: the 30 layer boxes appear one after another, then the camera comes to the
+// tokenizer beside layer 1. 1: the text goes into the machine; the tokens come out one by one, packed in boxes.
+// 2: they ride into layer 1; the camera goes in through its wall, and its storage shows: the lookup table, the weight
+// tables, the multiplier rows. 3: the followed token's box leaves the tray, passes down over the table's rows and
+// halts at its own; the row lights and its 576 numbers show.
+const STAG30 = Float32Array.from({ length: 30 }, (_, k) => (k / 29) * (1 - STAG_W));
+const STAG48 = Float32Array.from({ length: 48 }, (_, k) => (k / 47) * (1 - STAG_W));
+function openScript(ph) {
+  const stagT = Float32Array.from({ length: 96 }, (_, j) => (j < tr.T ? (j / Math.max(tr.T - 1, 1)) * (1 - STAG_W) : 0));
+  if (ph === 0) return [
+    { ms: 2600, sub: {}, pre: () => { G.LB.cur.s.fill(0); }, stag: { LB: STAG30 }, cam: OVERCAM, camMs: 1, tag: 'layers' },
+    { ms: 1600, sub: {}, tag: 'layers' },
+    { ms: 3000, sub: {}, cam: MACHCAM, camMs: 3000, tag: 'approach' },
+  ];
+  if (ph === 1) return [
+    { ms: 2600, sub: { feed: true }, back: ['MC'], live: true, tag: 'feed' },
+    { ms: 3200, sub: {}, stag: { TB: stagT }, back: ['TB'], tag: 'tokens' },
+  ];
+  if (ph === 2) return [
+    { ms: 3000, sub: { tb: 'tray' }, stag: { TB: stagT }, cam: [-300, 640, -10, 280], camMs: 1500, tag: 'ride' },
+    { ms: 2600, sub: { tb: 'tray', eb: true }, cam: ENTERCAM, camMs: 2600, stag: { EB: STAG48, WT: STAG }, tag: 'enter' },
+    { ms: 2600, sub: { tb: 'tray', eb: true }, cam: LOOKCAM, camMs: 2600, tag: 'inside' },
+  ];
+  const ks = tokSlab();
+  return [
+    { ms: 1300, sub: { look: 'top', lit: false }, tag: 'fetch' },
+    { ms: 1000 + 55 * ks, sub: { look: 'row', lit: false }, live: true, tag: 'scan' },
+    { ms: 900, sub: { look: 'row', lit: true }, back: ['TB'], tag: 'halt' },
+    { ms: 1600, sub: { look: 'aside', lit: true, vals: true }, stag: { R: STAG }, tag: 'found' },
+  ];
+}
+// The scripted stages of a part, or null when it is one plain move.
+function stepScript(s, ph) {
+  const key = STEPS[s].key;
+  return key === 'head' ? headScript(ph) : key === 'embed' ? embedScript(ph) : null;
 }
 // Start stage play.i; `into` ms of it have already passed (a seek lands mid-stage).
 function runStage(into = 0) {
   const st = play.stages[play.i], now = vnow() - into;
+  if (hover) { hover = null; if (selIdx < 0) $('#tip').hidden = true; }
+  lifts.clear();   // the scene moves on: what was under the pointer is gone
   play.t0 = now;
   if (st.pre) st.pre();
   const segs = buildState(play.s, play.ph, st.sub);
@@ -740,39 +1231,151 @@ function runStage(into = 0) {
   if (st.merge) {
     const [g, idx, src] = st.merge, cum = new Float64Array(577);
     for (let i = 0; i < 576; i++) cum[i + 1] = cum[i] + src[i];
-    merge = { g, idx, cum, t0: now, n: 0 }; g.vals[idx] = 0;
+    merge = { g, idx, cum, t0: now, ms: st.ms, n: 0 }; g.vals[idx] = 0;
   }
   if (st.glow) { glow = { g: st.glow, t0: now, ms: st.ms, n: 0 }; G.CH.vals[1] = 0; }
-  setLines(segs); setFlows(flowsFor(play.s, play.ph));
+  // an animated stage draws its lines as they are `into` it, not as they end
+  setLines(st.anim ? st.anim(Math.min(1, into / Math.max(1, st.ms))) : segs); setFlows(flowsFor(play.s, play.ph));
   if (st.ms === 0) lineFade.from = lineFade.to;
-  const cam = st.cam || (play.i === 0 ? (overview ? [(EX + GX) / 2, 300, 0, 26] : STEPS[play.s].cam(play.ph)) : null);
-  if (cam) { camFrom = camCur.slice(); camTo = cam; camT0 = st.ms ? now : now - 1e6; camDur = st.camMs || Math.min(900, Math.max(st.ms, 300)); }
+  let cam = st.cam || (play.i === 0 ? (overview ? [(EX + GX) / 2, 300, 0, 26] : STEPS[play.s].cam(play.ph)) : null);
+  if (cam && !st.cam && (overview || FITKEYS.has(STEPS[play.s].key))) cam = fitCam(cam, segs);
+  // from where the camera is now: a stage that ended this frame (a seek to its end) has not drawn its camera yet
+  if (cam) { camFrom = camAt(vnow()); camTo = cam; camT0 = st.ms ? now : now - 1e6; camDur = st.camMs || Math.min(900, Math.max(st.ms, 300)); }
   play.t = now + st.ms;
   dirty = true;
 }
 
-// The turn as a dial: the pair (first number, partner) is an arrow from the centre. Grey = before, pink = after,
-// yellow arc = how far it turned (whole extra turns are left out of the arc and named in the panel).
-function dialSegs(d) {
-  const cx = DIALX, cy = SY, R = DIALR, z = 0.5, segs = [];
-  for (let k = 0; k < 48; k++) {
-    const a0 = (k / 48) * 2 * Math.PI, a1 = ((k + 1) / 48) * 2 * Math.PI;
-    segs.push({ a: [cx + R * Math.cos(a0), cy + R * Math.sin(a0), z], b: [cx + R * Math.cos(a1), cy + R * Math.sin(a1), z], c: MARK, alpha: 0.3 });
-  }
-  segs.push({ a: [cx - R - 1.5, cy, z], b: [cx + R + 1.5, cy, z], c: MARK, alpha: 0.18 });
-  segs.push({ a: [cx, cy - R - 1.5, z], b: [cx, cy + R + 1.5, z], c: MARK, alpha: 0.18 });
-  const arrow = (x, y, col) => {
-    const L = Math.hypot(x, y) || 1, ux = x / L, uy = y / L, ex = cx + ux * R, ey = cy + uy * R;
-    segs.push({ a: [cx, cy, z], b: [ex, ey, z], c: col, alpha: 1 });
-    for (const sgn of [1, -1]) segs.push({ a: [ex, ey, z], b: [ex - ux * 1.3 - sgn * uy * 0.7, ey - uy * 1.3 + sgn * ux * 0.7, z], c: col, alpha: 1 });
+// ---------- the turn, broken down (head parts TURN0 … LANDP - 1) ----------
+// The pair (a, b) read as an arrow; its length; how fast this pair turns per token; how far for this token's place;
+// the sweep; and how cos and sin give the turned pair. d.ang is the model's own angle: place × base^(−2p/64).
+function turnInfo(d) {
+  const m = W.h.model, L = Math.hypot(d.a, d.b) || 1e-9, e = (2 * d.p) / m.HD, big = Math.pow(m.rope_base, e), sp = 1 / big;
+  const k = Math.floor(d.ang / (2 * Math.PI)), rest = d.ang - k * 2 * Math.PI;
+  return { L, e, big, sp, deg1: (sp * 180) / Math.PI, deg: (d.ang * 180) / Math.PI, k, rest, restDeg: (rest * 180) / Math.PI,
+    c: Math.cos(d.ang), s: Math.sin(d.ang), from: Math.atan2(d.b, d.a), sc: DIALR / L, base: m.rope_base, HD: m.HD };
+}
+// The stage of the turn on screen: the playing stage's, or the last of the part (a part's end state).
+function turnTag(ph, sub) { return sub && sub.turn ? sub.turn : TURN_PARTS[ph - TURN0].at(-1); }
+const curTurnTag = () => (isTurn(phase) ? turnTag(phase, stageSub()) : null);
+const turnFrom = t => isTurn(phase) && TURN_TAGS.indexOf(curTurnTag()) >= TURN_TAGS.indexOf(t);
+const TURN_A = C3('#f2c14e'), TURN_B = C3('#5fd3b3');
+const sweepE = u => 1 - Math.pow(1 - u, 3);    // the sweep: quick through any full turns, slowing at the end
+// Where the turning arrow points now (radians): during 'rotate' part of the way round, after it all the way.
+function turnTheta(d, ti) { return ti.from + d.ang * (curTurnTag() === 'rotate' ? sweepE(stageU()) : 1); }
+// The dial at stage `tag`, u (0..1) through it: what that stage adds grows in, everything before it stands. Drawn to
+// scale: the ring's radius stands for the pair's length, so the pair's arrow just reaches it.
+function turnSegs(d, tag, u = 1) {
+  const ti = turnInfo(d), cx = DIALX, cy = SY, R = DIALR, z = 0.5, segs = [], lv = TURN_TAGS.indexOf(tag);
+  const from = t => lv >= TURN_TAGS.indexOf(t), grow = t => (tag === t ? u * u * (3 - 2 * u) : 1);
+  const P = (x, y) => [cx + x, cy + y, z];
+  const line = (x0, y0, x1, y1, c, alpha = 1, w = 0) => {      // w: drawn three times side by side, for a bolder line
+    segs.push({ a: P(x0, y0), b: P(x1, y1), c, alpha });
+    if (!w) return;
+    const L = Math.hypot(x1 - x0, y1 - y0) || 1, nx = (-(y1 - y0) / L) * w, ny = ((x1 - x0) / L) * w;
+    for (const s of [1, -1]) segs.push({ a: P(x0 + s * nx, y0 + s * ny), b: P(x1 + s * nx, y1 + s * ny), c, alpha });
   };
-  const from = Math.atan2(d.b, d.a), turn = ((d.ang % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), n = Math.max(2, Math.ceil(turn / 0.08));
-  for (let k = 0; k < n; k++) {
-    const a0 = from + (turn * k) / n, a1 = from + (turn * (k + 1)) / n, r = R * 0.45;
-    segs.push({ a: [cx + r * Math.cos(a0), cy + r * Math.sin(a0), z], b: [cx + r * Math.cos(a1), cy + r * Math.sin(a1), z], c: POS, alpha: 0.95 });
+  const dashed = (x0, y0, x1, y1, c, alpha = 0.85) => {
+    for (let k = 0; k < 12; k += 2) line(x0 + ((x1 - x0) * k) / 12, y0 + ((y1 - y0) * k) / 12, x0 + ((x1 - x0) * (k + 1)) / 12, y0 + ((y1 - y0) * (k + 1)) / 12, c, alpha);
+  };
+  const arrow = (x0, y0, x1, y1, c, alpha = 1, w = 0.07) => {
+    const L = Math.hypot(x1 - x0, y1 - y0); if (L < 1e-3) return;
+    const ux = (x1 - x0) / L, uy = (y1 - y0) / L, h = Math.min(1.1, L * 0.4);
+    line(x0, y0, x1, y1, c, alpha, w);
+    for (const s of [1, -1]) line(x1, y1, x1 - ux * h - s * uy * h * 0.55, y1 - uy * h + s * ux * h * 0.55, c, alpha, w);
+  };
+  const arc = (r, a0, a1, c, alpha, dr = 0) => {      // dr: the radius grows this much per full turn (a spiral)
+    const n = Math.min(1500, Math.max(2, Math.ceil(Math.abs(a1 - a0) / 0.07)));
+    for (let k = 0; k < n; k++) {
+      const p = a0 + ((a1 - a0) * k) / n, q = a0 + ((a1 - a0) * (k + 1)) / n;
+      const rp = r + (dr * (p - a0)) / (2 * Math.PI), rq = r + (dr * (q - a0)) / (2 * Math.PI);
+      line(rp * Math.cos(p), rp * Math.sin(p), rq * Math.cos(q), rq * Math.sin(q), c, alpha);
+    }
+  };
+  const ax = d.a * ti.sc, by = d.b * ti.sc, before = from('rotate') ? 0.35 : 1;   // the pair as it was fades once turned
+  // the flat sheet: a line along and a line up, crossing at the centre
+  line(-R - 2.5, 0, R + 2.5, 0, MARK, 0.3); line(0, -R - 2.5, 0, R + 2.5, MARK, 0.3);
+  if (from('along')) line(0, 0, ax * grow('along'), 0, TURN_A, before, 0.08);
+  if (from('up')) line(ax, 0, ax, by * grow('up'), TURN_B, before, 0.08);
+  if (from('arrow')) arrow(0, 0, ax * grow('arrow'), by * grow('arrow'), MARK, before);
+  if (from('len')) arc(R, ti.from, ti.from + 2 * Math.PI * grow('len'), MARK, 0.45);
+  // where this pair's arrow would point at place 0, 1, 2, … of the text; this token's place long and white
+  if (from('why')) for (let j = 0; j < tr.T; j++) {
+    if (tag === 'why' && j > grow('why') * tr.T) break;
+    const a = ti.from + j * ti.sp, cur = j === tok, r0 = R - (cur ? 1.2 : 0.6), r1 = R + (cur ? 1.2 : 0.6);
+    line(r0 * Math.cos(a), r0 * Math.sin(a), r1 * Math.cos(a), r1 * Math.sin(a), cur ? SEL : MARK, cur ? 1 : 0.55, cur ? 0.05 : 0);
   }
-  arrow(d.a, d.b, MARK); arrow(d.qa, d.qb, DOCK);
+  // one token's worth of turn: the wedge from place 0 to place 1
+  if (from('speed3') && !from('rotate')) {
+    const a1 = ti.from + ti.sp * grow('speed3'), r = R * 0.62;
+    arc(r, ti.from, a1, POS, 0.95);
+    line(0, 0, r * Math.cos(a1), r * Math.sin(a1), POS, 0.8);
+  }
+  // the turn: the arrow sweeps by the whole angle; a spiral traces the way it went, one loop per full turn
+  if (from('rotate')) {
+    const th = ti.from + d.ang * (tag === 'rotate' ? sweepE(u) : 1), dr = ti.k ? Math.min(R * 0.12, (R * 0.4) / ti.k) : 0;
+    if (Math.abs(th - ti.from) > 1e-4) arc(R * 0.3, ti.from, th, POS, 0.9, dr);
+    const swept = tag !== 'rotate' || u >= 1, under = from('cs') && !from('sum');
+    arrow(0, 0, R * Math.cos(th), R * Math.sin(th), swept ? DOCK : SEL, under ? 0.18 : 1, 0.09);
+  }
+  // cos and sin: an arrow 1 long (the ring's radius) pointing along, turned by the angle; its tip is c along, s up
+  if (from('cs') && !from('mixA')) {
+    const a = ti.rest * grow('cs'), x = R * Math.cos(a), y = R * Math.sin(a);
+    arrow(0, 0, R, 0, MARK, 0.5, 0.04);
+    arrow(0, 0, x, y, SEL, 1, 0.06);
+    if (tag !== 'cs' || u > 0.6) { dashed(0, -0.15, x, -0.15, SEL); dashed(x, 0, x, y, SEL); }
+  }
+  // the two steps turned separately (a: c along, s up; b: s back, c up), then end to end: the turned pair
+  const tax = ax * ti.c, tay = ax * ti.s, tbx = -by * ti.s, tby = by * ti.c;
+  if (from('mixA')) arrow(0, 0, tax * grow('mixA'), tay * grow('mixA'), TURN_A, 1, 0.13);
+  if (from('mixB')) arrow(tax, tay, tax + tbx * grow('mixB'), tay + tby * grow('mixB'), TURN_B, 1, 0.13);
   return segs;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fd3 = v => (v === 0 ? '0' : Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1 ? v.toFixed(2) : Math.abs(v) >= 1e-3 ? v.toPrecision(3) : v.toExponential(2));
+const pv = v => (v < 0 ? `(${f3(v)})` : f3(v)), pv4 = v => (v < 0 ? `(${v.toFixed(4)})` : v.toFixed(4));
+// The card's paragraph for one stage of the turn. Words first, then the numbers, every step on its own.
+function turnLine(d, tag) {
+  const ti = turnInfo(d), a = f3(d.a), b = f3(d.b), n0 = 2 * d.p, n1 = n0 + 1, tk = `“${esc(showTok(tr.h.tokens[tok]))}”`;
+  const base = ti.base.toLocaleString('en'), ac = d.a * ti.c, as = d.a * ti.s, bs = d.b * ti.s, bc = d.b * ti.c, rd = fd3(ti.restDeg);
+  switch (tag) {
+    case 'vec': return `The pair is two numbers: <b>a = ${a}</b> (number ${n0}) and <b>b = ${b}</b> (number ${n1}). Two numbers are exactly enough to mark a spot on a flat sheet: how far along, and how far up. Read that way, the pair is one arrow from the centre to that spot. An arrow like that is called a <b>vector</b>.`;
+    case 'along': return `<span class="ka">a = ${a}</span>: go ${f3(Math.abs(d.a))} ${d.a < 0 ? 'to the left (a is negative)' : 'to the right'}.`;
+    case 'up': return `<span class="kb">b = ${b}</span>: then ${f3(Math.abs(d.b))} ${d.b < 0 ? 'down (b is negative)' : 'up'}.`;
+    case 'arrow': return 'The grey arrow from the centre to that spot is the pair as one thing. Where it points is its <b>direction</b>; how long it is, its <b>length</b>.';
+    case 'len': return `Its length: √(a² + b²) = √(${fmtH(d.a * d.a)} + ${fmtH(d.b * d.b)}) = <b>${f3(ti.L)}</b>. The step along, the step up and the arrow make a right-angled triangle, and in one of those the long side squared is the two short sides squared, added (Pythagoras). The ring marks every spot at this same length; the drawing is scaled so the arrow just reaches it.`;
+    case 'why': return `Next, the arrow is turned. Why: later, attention compares this token's question arrows with every token's label arrows, and scores how much they point the same way. Before that, every arrow is turned by an amount that grows with its token's place in the text. Two tokens' arrows then differ by the gap between their places, so the score can feel how far apart two tokens are, not only what they say. The ticks on the ring: where this arrow would point at place 0, 1, 2, … of the text. The white one is ${tk}, at place ${tok}.`;
+    case 'speed1': return `How fast a pair turns depends only on which pair it is. This is pair <b>${d.p}</b> of the ${ti.HD / 2} pairs in the block (numbers ${n0} and ${n1}). Step 1: 2 × ${d.p} ÷ ${ti.HD} = <b>${fd3(ti.e)}</b>.`;
+    case 'speed2': return `Step 2: ${base} to the power ${fd3(ti.e)} = <b>${fmtH(ti.big)}</b>. ` +
+      (ti.e === 0 ? 'Anything to the power 0 is 1.' : `To the power 1 it would be ${base} itself, to the power 0 it would be 1; ${fd3(ti.e)} lands in between.`);
+    case 'speed3': return `Step 3: 1 ÷ ${fmtH(ti.big)} = <b>${fd3(ti.sp)}</b>: how far this pair turns per token, in radians. A radian is a unit of angle, like the degree: 1 radian ≈ 57.3°, a full turn is 2π ≈ 6.283 radians. So ${fd3(ti.sp)} × 57.3 = <b>${fd3(ti.deg1)}° per token</b>: the orange wedge, from place 0 to place 1. Pair 0 turns fastest, 57.3° per token; each later pair turns slower, the last ones hardly at all.`;
+    case 'pos': return tok === 0 ? `${tk} is the first token: place 0. Turn = 0 × ${fd3(ti.deg1)}° = <b>0°</b>. The first token is not turned at all; pick a later token above to see a turn.`
+      : `${tk} sits at place <b>${tok}</b> of the text (counting from 0). Turn = ${tok} × ${fd3(ti.deg1)}° = <b>${fd3(ti.deg)}°</b>` +
+        (ti.k ? ` = ${ti.k} full turn${ti.k > 1 ? 's' : ''} (${ti.k} × 360°) + ${rd}°.` : '.');
+    case 'rotate': return tok === 0 ? 'Place 0: nothing turns; the arrow stays where it is.'
+      : `The arrow sweeps round by ${fd3(ti.deg)}°${ti.k ? ', quickly through the full turns, slowing at the end' : ''}. Its tip's two numbers change all the way; its length stays ${f3(ti.L)}. Turning never stretches an arrow.`;
+    case 'cs': return `How the computer turns it without drawing: two helper numbers for the angle. Take an arrow 1 long pointing straight along (here: as long as the ring's radius). Turned by ${rd}°, its tip ends <b>c</b> along and <b>s</b> up: c = cos ${rd}° = <b>${ti.c.toFixed(4)}</b>, s = sin ${rd}° = <b>${ti.s.toFixed(4)}</b>.` +
+      (ti.k ? ` Full turns change nothing, so ${fd3(ti.deg)}° gives the same c and s.` : '');
+    case 'mixA': return `Now turn the two steps one at a time. <span class="ka">The step along, a</span>, turned, becomes a × c along and a × s up: ${pv(d.a)} × ${pv4(ti.c)} = ${f3(ac)} along, ${pv(d.a)} × ${pv4(ti.s)} = ${f3(as)} up.`;
+    case 'mixB': return `<span class="kb">The step up, b</span>, turned, becomes b × s backwards (an arrow pointing up, turned, leans back) and b × c up: −${pv(d.b)} × ${pv4(ti.s)} = ${f3(-bs)} along, ${pv(d.b)} × ${pv4(ti.c)} = ${f3(bc)} up.`;
+    case 'sum': return `Put the two turned steps end to end and add them: new a = ${f3(ac)} + ${pv(-bs)} = <b>${f3(d.qa)}</b>, new b = ${f3(as)} + ${pv(bc)} = <b>${f3(d.qb)}</b>. That is the pink arrow. Its length: √(${pv(d.qa)}² + ${pv(d.qb)}²) = ${f3(Math.hypot(d.qa, d.qb))}, the same as before.`;
+    default: return '';
+  }
+}
+// The card beside the dial: one paragraph per stage of the current part, the one playing now bright.
+function turnCard() {
+  if (!W || !tr || !isTurn(phase)) return '';
+  const d = headDemo(layer, tok, demoHead), part = TURN_PARTS[phase - TURN0], ci = part.indexOf(curTurnTag());
+  let h = part.slice(0, ci + 1).map((t, j) => `<p${j === ci ? ' class="now"' : ''}>${turnLine(d, t)}</p>`).join('');
+  if (turnFrom('rotate') && !turnFrom('cs')) {
+    const ti = turnInfo(d), th = turnTheta(d, ti);
+    h += `<p class="tip">tip now: (${f3(ti.L * Math.cos(th))}, ${f3(ti.L * Math.sin(th))}) · length ${f3(ti.L)}</p>`;
+  }
+  return h;
+}
+// How long a stage of the turn plays: long enough to read its paragraph (about 25 characters a second).
+function turnMs(d, t) {
+  const n = turnLine(d, t).replace(/<[^>]+>/g, '').length;
+  return Math.max(t === 'rotate' ? 5000 : 2200, Math.min(20000, 1000 + 40 * n));
 }
 
 function buildState(s, ph, sub = null) {     // sub: a stage within the part (headScript), or null for the part's end state
@@ -797,13 +1400,26 @@ function buildState(s, ph, sub = null) {     // sub: a stage within the part (he
   // so the volume knob visibly keeps the shape and the multipliers visibly change it.
   const barS = demo ? robust(rraw) || 1 : 1;
   for (let i = 0; i < 576; i++) {
-    if (key === 'embed' && ph === 0) G.R.set(i, [EX + (i % 32) - 15.5, slabY(tokSlab()), 0.9], 0.3, valColor(rv[i]));
+    // the token's row of the embedding table: its 576 values side by side along the slab, until they fly to the stream
+    // the first EPICK pop up out of it one by one (sub.picked) and are carried to their slots (sub.carried).
+    // Before the lookup (embed parts 0-2) the row is not read yet; during it, they appear once the row is found.
+    const sliver = [EX - 16 + ((i + 0.5) * 32) / 576, slabY(tokSlab()), 0.9];
+    if (key === 'embed' && ph < 3) G.R.set(i, sliver, 0, null);
+    else if (key === 'embed' && (ph === 3 || (sub && sub.pending)) && !(sub && sub.carried && i < EPICK)) {
+      if (sub && i < (sub.picked || 0)) G.R.set(i, epickPos(i), 0.8, valColor(rv[i]));
+      else G.R.set(i, sliver, ph === 3 && sub && !sub.vals ? 0 : [SLIVER, 0.45, 0.45], valColor(rv[i]));
+    }
     else if (demo) barSet(G.R, i, residPos(i, ph === 0 ? 0 : XL), rraw[i], barS);   // from part 1 on, the stream is row 0's left board
     else G.R.set(i, residPos(i, rx, rz), 1, valColor(rv[i]));
   }
   G.R.vals.set(rraw);
-  // embedding table
-  for (let k = 0; k < 48; k++) G.EB.set(k, [EX, slabY(k), 0], key === 'embed' ? [32, 0.5, 1.2] : 0, k === tokSlab() ? DOCK : SLAB);
+  // embedding table: inside layer 1, from the moment the camera enters it; the token's row lights once it is found
+  const ebOn = key === 'embed' && (ph >= 2 || !!(sub && sub.eb)), ebLit = key === 'embed' && (ph >= 4 || (ph === 3 && (!sub || sub.lit)));
+  for (let k = 0; k < 48; k++) G.EB.set(k, [EX, slabY(k), 0], ebOn ? [32, 0.5, 1.2] : 0, k === tokSlab() && ebLit ? DOCK : SLAB);
+  // into the stream: empty slots where the stream will be (32 to a line, 18 lines), filled by the row in order
+  if (key === 'embed') for (let i = 0; i < 576; i++) G.FS.set(i, residPos(i, 0, -0.5), ph === 4 && sub && sub.slots ? [0.92, 0.92, 0.12] : 0, FRAME);
+  // the opening: the 30 layer boxes, the tokenizer, the token boxes, layer 1's storage
+  if (key === 'embed') segs.push(...openingScene(ph, sub, ebOn));
   // inside a head: the multiply rows, the volume-knob chain, the sum, the turn, the landing (see headScene)
   if (demo) segs.push(...headScene(demo, ph, sub));
   // question heads: in place for qkv/attend/headsout, flying to the concat plane, merging into the stream
@@ -814,7 +1430,7 @@ function buildState(s, ph, sub = null) {     // sub: a stage within the part (he
     else if (key === 'headsout') G.Q.set(k, headCell(h, i), 1, valColor(hon[k]));
     else if (key === 'concat') G.Q.set(k, residPos(k, DX, 0), 1, valColor(ph === 0 ? hon[k] : adn[k]));
     else if (key === 'add') G.Q.set(k, residPos(k, DX, ph === 0 ? 1.5 : 0), ph === 0 ? 1 : 0, valColor(adn[k]));
-    else if (demo && ph === 13 && h === demoHead) G.Q.set(k, landCell(i), 0.35, SLAB);     // the slot the pair lands in
+    else if (demo && ph === LANDP && h === demoHead) G.Q.set(k, landCell(i), 0.35, SLAB);     // the slot the pair lands in
     else G.Q.set(k, ['concat', 'add', 'dock', 'down'].includes(key) ? residPos(k, DX, 0) : headCell(h, i), 0, null);
   }
   G.Q.vals.set(key === 'qkv' || key === 'attend' ? qRaw : key === 'headsout' || (key === 'concat' && ph === 0) ? hoRaw : ad);
@@ -861,7 +1477,6 @@ function buildState(s, ph, sub = null) {     // sub: a stage within the part (he
       }
     }
   }
-  if (key === 'embed' && ph === 1) segs.push({ a: [EX + 16, slabY(tokSlab()), 0.6], b: [-16, 0, 0], c: DOCK, alpha: 0.5, bulge: 4 });
   return segs;
 }
 
@@ -874,7 +1489,7 @@ function apply(s, ph, dur) {
   lastApplied = [s, ph];
   phase = ph; merge = null; glow = null;
   if (s !== lastStepShown) { pan.set(0, 0, 0); lastStepShown = s; }   // a new step re-centres; a new token keeps the view
-  const scripted = forward && !overview && STEPS[s].key === 'head' ? headScript(ph) : null;
+  const scripted = forward && !overview ? stepScript(s, ph) : null;
   // A part without a script is one stage: a single move to its end state, dur ms long (0: at once). A part that
   // animates ends with a hold, so Play lingers on the result; the timeline counts the same stages.
   const stages = scripted && scripted.length ? scripted : [{ ms: dur, sub: null }];
@@ -886,9 +1501,9 @@ function apply(s, ph, dur) {
 }
 // Show one part (phase) of a step. Parts never advance on their own: ▶ or Play moves on.
 const PARTS = {
-  embed: ['the lookup', 'into the stream'],
+  embed: ['30 layers', 'tokens', 'into layer 1', 'the lookup', 'into the stream'],
   head: ['as it arrives', 'square each', 'add the squares', '÷ 576', 'square root', '1 ÷ that', 'volume knob',
-    'the multipliers', 'multiplied', 'the weights', 'multiply', 'add up', 'turn', 'land'],
+    'the multipliers', 'multiplied', 'the weights', 'multiply', 'add up', 'the partner', ...TURN_NAMES, 'land'],
   concat: ['side by side', 'mixed'],
   add: ['the update arrives', 'added'],
   down: ['the detectors\' answer', 'added'],
@@ -912,7 +1527,7 @@ function timeline() {
     if (!stepAvail(s)) return;
     const from = at;
     for (let p = 0; p < S.phases; p++) {
-      const sc = !overview && S.key === 'head' ? headScript(p) : null;
+      const sc = !overview ? stepScript(s, p) : null;
       const st = [...(sc && sc.length ? sc : [{ ms: 650, sub: null }]), HOLD_STAGE()], ms = st.reduce((a, x) => a + x.ms, 0);
       items.push({ s, p, st, ms, at }); at += ms;
     }
@@ -955,6 +1570,7 @@ function snap(s, ph, sub, cam) {       // jump straight to a state, no movement
   const segs = buildState(s, ph, sub), now = vnow();
   for (const g of Object.values(G)) { g.begin(0, now); g.step(now); }
   setLines(segs); lineFade.from = lineFade.to;
+  if (!overview && FITKEYS.has(STEPS[s].key)) cam = fitCam(cam, segs);
   camFrom = cam.slice(); camTo = cam.slice(); camCur = cam.slice(); camT0 = now - 1e6;
 }
 // , and . (also < and >): one stage back or forward, paused, like frame-stepping a video. The hold at the end of a
@@ -971,13 +1587,16 @@ function stageStep(dir) {
   if (dir > 0) advance();                                            // past the end: the next layer, held at its start
   else if (layer > 0) { stepBack(); seekTime(timeline().total); }     // before the start: the previous layer's end
 }
+// One segment per part, its width following the part's play time; a wider gap where a new step begins.
 function buildSeekBar() {
   const box = $('#seekSegs');
   box.textContent = '';
-  for (const st of tline.steps) {
-    const d = document.createElement('div'); d.className = 'sg'; d.style.flexGrow = Math.max(st.ms, 1500);
+  tline.items.forEach((it, n) => {
+    const d = document.createElement('div');
+    d.className = 'sg' + (n && it.p === 0 ? ' chap' : '');
+    d.style.flexGrow = Math.max(it.ms, 900);
     d.appendChild(document.createElement('i')); box.appendChild(d);
-  }
+  });
   lastSeek = '';
 }
 const fmtT = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -988,20 +1607,20 @@ function updateSeek() {
   if (key === lastSeek) return;
   lastSeek = key;
   const segs = $('#seekSegs').children, br = $('#seek').getBoundingClientRect();
-  tl.steps.forEach((st, i) => {
-    const f = Math.min(1, Math.max(0, (T - st.at) / st.ms));
+  tl.items.forEach((it, i) => {
+    const f = Math.min(1, Math.max(0, (T - it.at) / it.ms));
     segs[i].firstChild.style.width = (f * 100).toFixed(2) + '%';
-    if (T >= st.at && (T < st.at + st.ms || i === tl.steps.length - 1)) {
+    if (T >= it.at && (T < it.at + it.ms || i === tl.items.length - 1)) {
       const r = segs[i].getBoundingClientRect(); $('#seekThumb').style.left = (r.left - br.left + r.width * f) + 'px';
     }
   });
   $('#seekTime').textContent = `${fmtT(T)} / ${fmtT(tl.total)}`;
 }
-function seekAt(x) {                   // a point on the bar -> a time: the step segment under it, and how far along it
+function seekAt(x) {                   // a point on the bar -> a time: the part segment under it, and how far along it
   const tl = timeline(), segs = [...$('#seekSegs').children];
   for (let i = 0; i < segs.length; i++) {
     const r = segs[i].getBoundingClientRect();
-    if (x <= r.right + 1.5 || i === segs.length - 1) return tl.steps[i].at + tl.steps[i].ms * Math.min(1, Math.max(0, (x - r.left) / r.width));
+    if (x <= r.right + 1 || i === segs.length - 1) return tl.items[i].at + tl.items[i].ms * Math.min(1, Math.max(0, (x - r.left) / r.width));
   }
   return 0;
 }
@@ -1049,7 +1668,12 @@ function renderUI() {
   document.querySelectorAll('#headPick button.pb').forEach((b, k) => b.classList.toggle('on', k === demoPair));
   let st = '';
   const i = l * T + t;
-  if (key === 'embed') st = `token “${showTok(tr.h.tokens[t])}” → ID ${tr.h.ids[t]} → row ${tr.h.ids[t]} of ${tr.h.model.vocab.toLocaleString('en')} → 576 numbers`;
+  if (key === 'embed') {
+    st = phase === 0 ? `30 layers in a row · each reads the stream and adds to it · layer 1 also holds the lookup table`
+      : phase === 1 ? `the text → ${T} tokens: ${tr.h.tokens.slice(0, 8).map(s => showTok(s)).join(' | ')}${T > 8 ? ' | …' : ''}`
+      : phase === 2 ? `inside layer 1: its storage · the lookup table (${tr.h.model.vocab.toLocaleString('en')} rows × 576), the multiplier rows, the weight tables`
+      : `token “${showTok(tr.h.tokens[t])}” → ID ${tr.h.ids[t]} → row ${tr.h.ids[t]} of ${tr.h.model.vocab.toLocaleString('en')} → 576 numbers`;
+  }
   if (key === 'in') { const v = deq('resid', l, t, 576); st = `size of the stream (‖x‖) = ${Math.hypot(...v).toFixed(2)} · biggest single number: ${f3(v.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a), 0))}`; }
   if (key === 'head') {
     if (!W) st = 'weights file not loaded';
@@ -1066,15 +1690,24 @@ function renderUI() {
         `1 ÷ ${fmtH(d.rt)} = <b>${d.factor.toFixed(3)}</b> · that is the volume knob`,
         `volume knob: every number × ${d.factor.toFixed(3)} · a quiet row is turned up, a loud row down · the shape does not change`,
         (() => { const gm = Array.from(d.g, Math.abs).sort((a, b) => a - b)[288], neg = d.g.filter(v => v < 0).length, big = d.g.filter(v => Math.abs(v) > 10 * gm).length;
-          return `the 576 learned multipliers: from ${f3(Math.min(...d.g))} to ${f3(Math.max(...d.g))}, middle size ${gm.toFixed(3)} · ${neg} are negative (they flip the sign) · ${big} are over 10× the middle size`; })(),
+          return `loaded from the model: layer ${l + 1}'s one row of 576 learned multipliers, the same for every token · from ${f3(Math.min(...d.g))} to ${f3(Math.max(...d.g))}, middle size ${gm.toFixed(3)} · ${neg} are negative (they flip the sign) · ${big} are over 10× the middle size`; })(),
         (() => { const top = Array.from(d.n.keys()).sort((a, b) => Math.abs(d.n[b]) - Math.abs(d.n[a]))[0], rank = Array.from(d.x.keys()).sort((a, b) => Math.abs(d.x[b]) - Math.abs(d.x[a])).indexOf(top) + 1;
           return `after the multipliers the biggest is #${top}: ${f3(d.xf[top])} × ${f3(d.g[top])} = <b>${f3(d.n[top])}</b> · on arrival it was only the ${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'} biggest`; })(),
-        `question block ${demoHead}, numbers ${2 * d.p} and ${2 * d.p + 1} of its 64 · one weight for each of the 576 stream numbers`,
+        `the model keeps a row of 576 weights for each of the 64 numbers of a question block, one weight per stream number · this row makes number ${2 * d.p} of question block ${demoHead}; its partner, number ${2 * d.p + 1}, comes after the sum`,
         `576 multiplications · the biggest: #${d.imax}: ${f3(d.n[d.imax])} × ${f3(d.wa[d.imax])} = ${f3(d.pa[d.imax])}`,
-        `the 576 parts fly into the holder one by one, and it counts up: all added = <b>${f3(d.a)}</b> · its partner, same recipe with the next weight row = <b>${f3(d.b)}</b>`,
-        (t === 0 ? `the first token is not turned (position 0) → still <b>${f3(d.qa)}, ${f3(d.qb)}</b>`
-          : `turned ${deg.toFixed(0)}°${turns ? ` plus ${turns} full turn${turns > 1 ? 's' : ''}` : ''} (position ${t}) → <b>${f3(d.qa)}, ${f3(d.qb)}</b> · same length: ${Math.hypot(d.a, d.b).toFixed(2)}`) +
-          ` · this pair turns ${((Math.pow(W.h.model.rope_base, (-2 * d.p) / W.h.model.HD) * 180) / Math.PI).toPrecision(2)}° per token; the fastest pair (0) turns 57°, the slowest under 0.001°`,
+        `the 576 parts fly into the holder one by one, and it counts up: all added = <b>${f3(d.a)}</b> · that is number ${2 * d.p}, before the turn`,
+        `the partner, number ${2 * d.p + 1}: the same 576 numbers (after the multipliers) × the row of weights that makes number ${2 * d.p + 1}, added up = <b>${f3(d.b)}</b> · numbers are turned in pairs (0 with 1, 2 with 3, …), so (${f3(d.a)}, ${f3(d.b)}) is the pair that gets turned`,
+        ...(() => {
+          const ti = turnInfo(d), place = t === 0 ? 'place 0 (the first token): not turned' : `place ${t}: ${fd3(ti.deg)}°${turns ? ` = ${turns} full turn${turns > 1 ? 's' : ''} + ${deg.toFixed(1)}°` : ''}`;
+          return [
+            `the pair (${f3(d.a)}, ${f3(d.b)}) as an arrow: ${f3(d.a)} along, ${f3(d.b)} up · length √(a² + b²) = <b>${f3(ti.L)}</b>`,
+            'every arrow is turned by an amount that grows with its token\'s place, so attention can tell how far apart two tokens are',
+            `pair ${d.p}: 1 ÷ ${ti.base.toLocaleString('en')}^(2 × ${d.p} ÷ ${ti.HD}) = ${fd3(ti.sp)} radians = <b>${fd3(ti.deg1)}° per token</b> · the fastest pair (0) turns 57.3° per token, the slowest under 0.001°`,
+            `${place}`,
+            t === 0 ? `not turned: still <b>${f3(d.qa)}, ${f3(d.qb)}</b>` : `turned by ${fd3(ti.deg)}° → the pink tip is <b>${f3(d.qa)}, ${f3(d.qb)}</b> · same length: ${f3(ti.L)}`,
+            `c = cos ${fd3(ti.restDeg)}° = ${ti.c.toFixed(4)}, s = sin = ${ti.s.toFixed(4)} · new a = a×c − b×s = <b>${f3(d.qa)}</b> · new b = a×s + b×c = <b>${f3(d.qb)}</b>`,
+          ];
+        })(),
         `lands as numbers ${2 * d.p} and ${2 * d.p + 1} of question block ${demoHead}: <b>${f3(d.qa)}, ${f3(d.qb)}</b> · recorded in the trace: ${f3(d.recA)}, ${f3(d.recB)} ` +
           (Math.max(Math.abs(d.qa - d.recA), Math.abs(d.qb - d.recB)) <= 0.02 * Math.max(...Array.from(d.rec, Math.abs)) + 1e-6 ? '<span class="ok">✓ match</span>' : '(differs: see About)'),
       ][phase];
@@ -1121,8 +1754,9 @@ function renderUI() {
         [[7, 8], 'trained multiplier', `${f3(d.xf[k])} × ${f3(d.g[k])} = <b>${f3(d.n[k])}</b><i>learned during training, one fixed number per position</i>`],
         [[9, 10], `weight (head ${demoHead}, pair ${d.p})`, `${f3(d.n[k])} × ${f3(d.wa[k])} = <b>${f3(d.pa[k])}</b>`],
         [[11], 'add up', `${f3(d.pa[k])} is 1 of the 576 parts; all 576 added = <b>${f3(d.a)}</b>`],
-        [[12], 'turn', `with its partner ${f3(d.b)}, turned ${turnTxt} → <b>${f3(d.qa)}</b>`],
-        [[13], 'land', `question number ${2 * d.p} = <b>${f3(d.qa)}</b><i>recorded by the real model: ${f3(d.recA)}</i>`],
+        [[12], 'the partner', `same ${f3(d.n[k])}, × its weight for number ${2 * d.p + 1}: ${f3(d.wb[k])} = ${f3(d.pb[k])}; all 576 added = <b>${f3(d.b)}</b>`],
+        [[13, 14, 15, 16, 17, 18], 'turn', `the pair (${f3(d.a)}, ${f3(d.b)}) turned ${turnTxt} → <b>${f3(d.qa)}</b>, ${f3(d.qb)}`],
+        [[LANDP], 'land', `question number ${2 * d.p} = <b>${f3(d.qa)}</b><i>recorded by the real model: ${f3(d.recA)}</i>`],
       ];
       line = `position #${k}, step by step<ol class="steps">` +
         rows.map(([ps, name, sum]) => `<li${ps.includes(phase) ? ' class="now"' : ''}><span class="sn">${name}</span>${sum}</li>`).join('') + '</ol>';
@@ -1142,7 +1776,7 @@ function buildTokens() {
     b.onclick = () => { tok = j; go(step, false, phase); };
     box.appendChild(b);
   });
-  box.lastChild && box.lastChild.scrollIntoView({ inline: 'end', block: 'nearest' });
+  box.scrollLeft = 0;   // the strip starts at the first token, where a fresh load begins
 }
 function buildAbout() {
   const h = tr.h, bl = h.blocks;
@@ -1193,8 +1827,8 @@ function advance() {
   else return false;
   return true;
 }
-$('#prev').onclick = () => { stopPlay(); setPaused(false); overview = false; stepBack(); };
-$('#next').onclick = () => { stopPlay(); setPaused(false); overview = false; advance(); };
+$('#prev').onclick = () => { stopPlay(); setPaused(false); overview = false; stepBack(); easeViewHome(); };
+$('#next').onclick = () => { stopPlay(); setPaused(false); overview = false; advance(); easeViewHome(); };
 $('#layer').oninput = e => { layer = +e.target.value; if (!stepAvail(step)) step = SI.in; go(step, false, phase); };
 $('#overview').onclick = () => { overview = !overview; $('#overview').textContent = overview ? 'Follow step' : 'Whole layer'; go(step, false, phase); };
 // ▶ / ❚❚ (like a video): Play runs the clock and moves on by itself when a part (and its hold) is done; Pause stops
@@ -1204,7 +1838,7 @@ function setAuto(on) { autoplay = on; $('#play').textContent = on ? '❚❚' : '
 function stopPlay() { setAuto(false); }
 $('#play').onclick = () => {
   if (autoplay && !paused) { setAuto(false); setPaused(true); return; }
-  overview = false; setPaused(false); setAuto(true);
+  overview = false; setPaused(false); setAuto(true); easeViewHome();
 };
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -1221,9 +1855,10 @@ async function loadTrace(fetcher) {
   let P;
   try { P = await fetchPack(fetcher); } catch (e) { status(e.message, true); return; }
   tr = { h: P.h, a: P.a, T: P.h.tokens.length, L: P.h.model.L };
-  tok = tr.T - 1; layer = Math.min(layer, tr.L - 1);
+  tok = 0; layer = Math.min(layer, tr.L - 1);   // start at the first token, so a fresh load reads from the beginning
   buildTokens(); buildAbout();
-  go(layer === 0 ? SI.embed : SI.in, false);
+  // layer 1 opens at the very start: the 30 layers, then the tokenizer (its first part plays once, then waits for ▶)
+  if (layer === 0) { step = SI.embed; phase = 0; seekTime(0); } else go(SI.in, false);
   status(`${tr.T} tokens · ${tr.h.blocks.kind === 'final' ? 'final' : 'provisional'} blocks`, false, true);
 }
 async function init() {
@@ -1246,6 +1881,8 @@ async function init() {
 // One finger / left mouse: orbit. Two fingers: move (centroid) and zoom (pinch) together.
 // Right mouse or shift-drag: move. Double-tap / double-click: reset the view.
 const pts = new Map(); let moved = 0, pinch0 = 0, zoom0 = 1, dirty = true, cent0 = null, lastDist = 50, lastTap = 0;
+// zoom multiplies the distance the stage's camera framing picks: 1/25 of it at the closest, 40× at the farthest
+const ZOOM_IN = 0.04, ZOOM_OUT = 40;
 const pan = new THREE.Vector3();
 const pdist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
 const centroid = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
@@ -1254,10 +1891,32 @@ function panBy(dxPx, dyPx) {
   pan.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), -dxPx * k);
   pan.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1), dyPx * k);
 }
-function resetView() { theta = -0.42; phi = 0.2; zoom = 1; pan.set(0, 0, 0); dirty = true; }
+const TH0 = -0.42, PH0 = 0.2;   // the scripted viewing angle: every stage's framing is made for it
+// ... except the turn, a flat drawing on a sheet: that is looked at straight on
+const homeView = () => (tr && STEPS[step].key === 'head' && isTurn(phase) ? [0, 0] : [TH0, PH0]);
+function resetView() { viewEase = null; [theta, phi] = homeView(); zoom = 1; pan.set(0, 0, 0); dirty = true; }
+// Your own orbit, pan and zoom ease back to the scripted view when playback carries on (▶, ⏭, ⏮, or the next part
+// while playing), so a stage is never framed from wherever a drag left the camera. Touching the view stops the ease.
+// The scripted angle itself changes into and out of the turn; frame() eases that too (homeKey).
+let viewEase = null, homeKey = '';
+function easeViewHome(ms = 900) {
+  const [th0, ph0] = homeView();
+  if (Math.abs(theta - th0) < 1e-3 && Math.abs(phi - ph0) < 1e-3 && Math.abs(zoom - 1) < 1e-3 && pan.lengthSq() < 1e-6) return;
+  viewEase = { t0: performance.now(), ms, th: theta, ph: phi, z: zoom, p: pan.clone(), th0, ph0 };
+}
+function stepViewEase(real) {
+  const hk = homeView().join();
+  if (hk !== homeKey) { if (homeKey) easeViewHome(1100); homeKey = hk; }
+  if (!viewEase) return false;
+  const k = Math.min(1, Math.max(0, (real - viewEase.t0) / viewEase.ms)), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  theta = viewEase.th + (viewEase.th0 - viewEase.th) * e; phi = viewEase.ph + (viewEase.ph0 - viewEase.ph) * e;
+  zoom = viewEase.z * Math.pow(1 / viewEase.z, e); pan.copy(viewEase.p).multiplyScalar(1 - e);
+  if (k >= 1) viewEase = null;
+  return true;
+}
 canvas.addEventListener('contextmenu', e => e.preventDefault());
 canvas.addEventListener('pointerdown', e => {
-  canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0;
+  canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; viewEase = null;
   if (pts.size === 2) { pinch0 = pdist(); zoom0 = zoom; cent0 = centroid(); }
 });
 canvas.addEventListener('pointermove', e => {
@@ -1268,7 +1927,7 @@ canvas.addEventListener('pointermove', e => {
     if (e.buttons === 2 || e.shiftKey) panBy(dx, dy);
     else { theta -= dx * 0.005; phi = Math.max(-1.3, Math.min(1.3, phi + dy * 0.005)); }
   } else if (pts.size === 2) {
-    zoom = Math.max(0.04, Math.min(4, (zoom0 * pinch0) / Math.max(pdist(), 1)));
+    zoom = Math.max(ZOOM_IN, Math.min(ZOOM_OUT, (zoom0 * pinch0) / Math.max(pdist(), 1)));
     const c = centroid();
     if (cent0) panBy(c.x - cent0.x, c.y - cent0.y);
     cent0 = c;
@@ -1286,40 +1945,42 @@ const endPtr = e => {
 };
 canvas.addEventListener('pointerup', endPtr);
 canvas.addEventListener('pointercancel', e => { pts.delete(e.pointerId); if (pts.size < 2) cent0 = null; });
-canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.04, Math.min(4, zoom * Math.exp(e.deltaY * 0.0012))); dirty = true; }, { passive: false });
+canvas.addEventListener('wheel', e => { e.preventDefault(); viewEase = null; zoom = Math.max(ZOOM_IN, Math.min(ZOOM_OUT, zoom * Math.exp(e.deltaY * 0.0012))); dirty = true; }, { passive: false });
 
 function setSel(i) { selIdx = i; for (const g of Object.values(G)) g.write(); dirty = true; renderUI(); }
 const ray = new THREE.Raycaster();
 const PICK = { R: 'stream', Q: 'question', K: 'label (key)', V: 'content (value)', F: 'detectors\' answer', NS: 'sum', SA: 'left of the pair', SB: 'right of the pair',
   CH: 'value', RS: 'picture of the sum', B0: 'twin (copy of the stream)', P0: 'square', A1: 'stream', B1: 'knob', P1: 'after the knob', A2: 'after the knob',
-  B2: 'learned multiplier', P2: 'after the multiplier', A3: 'after the multiplier', B3: 'weight', P3: 'number × weight', S0: 'slot', S1: 'slot', S2: 'slot', S3: 'slot' };
-function pick(e) {
-  const tip = $('#tip');
-  if (!tr) return;
+  B2: 'learned multiplier', P2: 'after the multiplier', A3: 'after the multiplier', B3: 'weight', P3: 'number × weight', S0: 'slot', S1: 'slot', S2: 'slot', S3: 'slot',
+  A4: 'after the multiplier', B4: 'weight (partner)', P4: 'number × weight (partner)', S4: 'slot' };
+// The number under a screen point: { name, g, i } or null. A cube counts by its largest side, so the thin values of
+// a table row are found too.
+const big = (g, i) => Math.max(g.cur.s[i * 3], g.cur.s[i * 3 + 1], g.cur.s[i * 3 + 2]) >= 0.2;
+function findHit(e) {
   const r = canvas.getBoundingClientRect();
   ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
   let best = null;
   for (const [name, g] of Object.entries(G)) {
-    if (name === 'EB') continue;
+    if (NOPICK.has(name)) continue;   // table slabs, not numbers
     // three.js tests the ray against one bounding sphere first, computed once and never again; cubes move and
-    // grow into bars, so a stale sphere missed the sides of columns. Recompute it on every tap.
+    // grow into bars, so a stale sphere missed the sides of columns. Recompute it on every test.
     g.mesh.computeBoundingSphere();
     for (const hit of ray.intersectObject(g.mesh)) {
-      if (g.cur.s[hit.instanceId * 3] < 0.2) continue;
+      if (!big(g, hit.instanceId)) continue;
       if (!best || hit.distance < best.d) best = { name, g, i: hit.instanceId, d: hit.distance };
       break;
     }
   }
   if (!best) {
     // Fingertips are wider than the cubes at normal zoom: take the visible cube whose centre is nearest the
-    // tap, within 20 px, when the ray hit nothing.
-    const px = e.clientX - r.left, py = e.clientY - r.top;
-    let bd = 20 * 20;
+    // point, within 20 px (8 px for a mouse), when the ray hit nothing.
+    const px = e.clientX - r.left, py = e.clientY - r.top, lim = e.pointerType === 'mouse' ? 8 : 20;
+    let bd = lim * lim;
     for (const [name, g] of Object.entries(G)) {
-      if (name === 'EB') continue;
+      if (NOPICK.has(name)) continue;
       for (let i = 0; i < g.n; i++) {
         const j = i * 3;
-        if (g.cur.s[j] < 0.2) continue;
+        if (!big(g, i)) continue;
         v3.set(g.cur.p[j], g.cur.p[j + 1], g.cur.p[j + 2]).project(camera);
         if (v3.z > 1) continue;
         const dx = ((v3.x + 1) / 2) * r.width - px, dy = ((1 - v3.y) / 2) * r.height - py, d2 = dx * dx + dy * dy;
@@ -1327,27 +1988,109 @@ function pick(e) {
       }
     }
   }
-  if (!best) { tip.hidden = true; setSel(-1); return; }
-  const { name, g, i } = best, T = tr.T, l = layer, t = tok;
-  if (g.linked) setSel(selIdx === i ? -1 : i);          // tap toggles tracking of this position
-  let txt;
+  return best;
+}
+function tipText({ name, g, i }) {
+  const T = tr.T, l = layer, t = tok;
   if (name === 'B') {
     const o = (l * T + t) * 48 + i;
-    txt = `block ${i}: ${fmtPct(tr.a.bshare[o] / 255)} of the detectors' output · ${tr.a.bdock[o] ? 'docked' : 'not docked'} · ${tr.a.bunits[o]}/32 of its detectors in the single-detector set`;
-  } else if (name === 'TK') {
+    return `block ${i}: ${fmtPct(tr.a.bshare[o] / 255)} of the detectors' output · ${tr.a.bdock[o] ? 'docked' : 'not docked'} · ${tr.a.bunits[o]}/32 of its detectors in the single-detector set`;
+  }
+  if (name === 'TK') {
     let w = '';
     if (i <= t) w = ' · attention from each question block: ' + Array.from({ length: 9 }, (_, h) => (tr.a.att[((l * 9 + h) * T + t) * T + i] / 255).toFixed(2)).join(' ');
-    txt = `token ${i} “${showTok(tr.h.tokens[i])}”${i > t ? ' (later: not visible to this token)' : w}`;
-  } else if (name === 'Q' && STEPS[step].key !== 'concat' && STEPS[step].key !== 'add') {
-    txt = `${PICK.Q} block ${Math.floor(i / 64)}, number ${i % 64} = ${f3(g.vals[i])}`;
-  } else if (name === 'K' || name === 'V') {
+    return `token ${i} “${showTok(tr.h.tokens[i])}”${i > t ? ' (later: not visible to this token)' : w}`;
+  }
+  if (name === 'TB') return `token ${i}: “${showTok(tr.h.tokens[i])}” · ID ${tr.h.ids[i]}`;
+  if (name === 'R' && STEPS[step].key === 'embed' && (phase === 3 || (stageSub() && stageSub().pending && !(stageSub().carried && i < EPICK)))) return `embedding table row ${tr.h.ids[t]}, value #${i} = ${f3(g.vals[i])}`;
+  if (name === 'Q' && STEPS[step].key !== 'concat' && STEPS[step].key !== 'add') return `${PICK.Q} block ${Math.floor(i / 64)}, number ${i % 64} = ${f3(g.vals[i])}`;
+  if (name === 'K' || name === 'V') {
     const gi = Math.floor(i / 64);
-    txt = `${PICK[name]} block ${gi} (shared by question blocks ${gi * 3}–${gi * 3 + 2}), number ${i % 64} = ${f3(g.vals[i])}`;
-  } else txt = `${PICK[name] || 'value'} #${i} = ${f3(g.vals[i])}`;
+    return `${PICK[name]} block ${gi} (shared by question blocks ${gi * 3}–${gi * 3 + 2}), number ${i % 64} = ${f3(g.vals[i])}`;
+  }
+  return `${PICK[name] || 'value'} #${i} = ${f3(g.vals[i])}`;
+}
+function showTipAt(e, txt) {
+  const tip = $('#tip');
   tip.textContent = txt; tip.hidden = false;
   tip.style.left = Math.min(e.clientX + 12, innerWidth - 270) + 'px'; tip.style.top = Math.max(e.clientY - 40, 8) + 'px';
 }
+function setHover(h) {         // the value under the pointer eases up; the one it left eases back down
+  if ((h && hover && h.g === hover.g && h.i === hover.i) || (!h && !hover)) return;
+  liftTo(hover, 0);
+  hover = h ? { name: h.name, g: h.g, i: h.i } : null;
+  liftTo(hover, 1);
+  dirty = true;
+}
+// Is the pointer still over the hovered value, at rest or lifted? Its screen box covers both, so a value that rises
+// out from under the cursor keeps the hover instead of dropping, landing under it again and rising again.
+function overHover(e) {
+  if (!hover) return false;
+  const g = hover.g, j = hover.i * 3, r = canvas.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const hx = (g.cur.s[j] * g.size) / 2, hy = (g.cur.s[j + 1] * g.size) / 2, hz = (g.cur.s[j + 2] * g.size) / 2, up = liftH(g.cur.s[j + 1]);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const dx of [-hx, hx]) for (const dy of [-hy, hy + up]) for (const dz of [-hz, hz]) {
+    v3.set(g.cur.p[j] + dx, g.cur.p[j + 1] + dy, g.cur.p[j + 2] + dz).project(camera);
+    const sx = ((v3.x + 1) / 2) * r.width, sy = ((1 - v3.y) / 2) * r.height;
+    x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+  }
+  return px >= x0 - 1 && px <= x1 + 1 && py >= y0 - 1 && py <= y1 + 1;
+}
+function pick(e) {             // a tap or click: lift the value, show it, and toggle tracking of its position
+  if (!tr) return;
+  const best = findHit(e);
+  setHover(best);
+  if (!best) { $('#tip').hidden = true; setSel(-1); return; }
+  if (best.g.linked) setSel(selIdx === best.i ? -1 : best.i);
+  showTipAt(e, tipText(best));
+}
+// The mouse, with no button down: whatever is under it lifts and shows its value (tested once per frame at most).
+let hoverEv = null;
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerType !== 'mouse' || e.buttons || pts.size) return;
+  if (!hoverEv) requestAnimationFrame(() => {
+    const ev = hoverEv; hoverEv = null;
+    if (!tr) return;
+    const best = overHover(ev) ? hover : findHit(ev);
+    setHover(best);
+    if (best) showTipAt(ev, tipText(best)); else if (selIdx < 0) $('#tip').hidden = true;
+  });
+  hoverEv = e;
+});
+canvas.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') { setHover(null); if (selIdx < 0) $('#tip').hidden = true; } });
 
+// The camera on its orbit (theta, phi) around a target, at a distance.
+function placeCamera(tx, ty, tz, dist) {
+  camera.position.set(tx + dist * Math.sin(theta) * Math.cos(phi), ty + dist * Math.sin(phi), tz + dist * Math.cos(theta) * Math.cos(phi));
+  camera.lookAt(tx, ty, tz);
+  camera.updateMatrixWorld();
+}
+// Frame a camera tuple's rectangle (centre x, width, centre y, height, in the z = 0 plane) in the free part of the
+// canvas (below the top bar, above the panel, left of an open side drawer): centred, and as large as fits. The camera
+// looks from an angle, so the rectangle's picture is not centred around its own centre; so start from the plain fit,
+// then measure where its corners land and correct the aim and the distance, a few times over.
+const fitT = new THREE.Vector3(), fitR = new THREE.Vector3(), fitU = new THREE.Vector3(), fitP = new THREE.Vector3();
+function fitCamera(c, H, Wd, panelH, topH, drawerW, vf) {
+  const tv = Math.tan(vf), th = tv * camera.aspect;
+  const fx0 = -1, fx1 = 1 - (2 * drawerW) / Wd, fy0 = -1 + (2 * panelH) / H, fy1 = 1 - (2 * topH) / H;   // free area, -1..1
+  const fw = Math.max(0.1, (fx1 - fx0) / 2), fh = Math.max(0.1, (fy1 - fy0) / 2), fcx = (fx0 + fx1) / 2, fcy = (fy0 + fy1) / 2;
+  let dist = Math.max(c[1] / 2 / (th * fw), c[3] / 2 / (tv * fh));
+  fitT.set(c[0], c[2], 0);
+  for (let it = 0; it < 4; it++) {
+    placeCamera(fitT.x, fitT.y, fitT.z, dist);
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const a of [-1, 1]) for (const b of [-1, 1]) {
+      fitP.set(c[0] + (a * c[1]) / 2, c[2] + (b * c[3]) / 2, 0).project(camera);
+      x0 = Math.min(x0, fitP.x); x1 = Math.max(x1, fitP.x); y0 = Math.min(y0, fitP.y); y1 = Math.max(y1, fitP.y);
+    }
+    // aim: move the target so the picture's centre lands on the free area's centre
+    fitR.setFromMatrixColumn(camera.matrixWorld, 0); fitU.setFromMatrixColumn(camera.matrixWorld, 1);
+    fitT.addScaledVector(fitR, ((x0 + x1) / 2 - fcx) * dist * th).addScaledVector(fitU, ((y0 + y1) / 2 - fcy) * dist * tv);
+    // size: scale the distance so the picture just fills the free area
+    dist *= Math.max((x1 - x0) / (2 * fw * 0.97), (y1 - y0) / (2 * fh * 0.97));
+  }
+  return { t: fitT, dist };
+}
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); dirty = true;
@@ -1358,11 +2101,17 @@ function frame(real) {
   const now = vnow();                  // animation time: stands still while paused
   for (const g of Object.values(G)) if (g.step(now)) dirty = true;
   if (updatePulses(real)) dirty = true;
+  if (stepLifts(real)) dirty = true;
+  if (play && !play.done && play.stages[play.i].live && !paused) dirty = true;   // a caption that moves or counts along
+  const ast = play && !play.done ? play.stages[play.i] : null;                   // a stage whose lines move with it
+  if (ast && ast.anim) { const u = stageU(); if (u !== play.animU) { play.animU = u; setLines(ast.anim(u), true); dirty = true; } }
   if (play && !play.done && now >= play.t) { if (play.i + 1 < play.stages.length) { play.i++; runStage(now - play.t); } else play.done = true; }
-  if (autoplay && !paused && tr && play && play.done && !advance()) stopPlay();
+  if (autoplay && !paused && tr && play && play.done) { if (advance()) easeViewHome(); else stopPlay(); }
+  if (stepViewEase(real)) dirty = true;
   updateSeek();
+  dudeFrame(now);
   if (merge && merge.n < 576) {   // count the cubes that have arrived in the holder (same timing as Group.step's stagger)
-    const u = (now - merge.t0) / MERGE_MS, n = Math.max(0, Math.min(576, Math.floor(((u - STAG_W) / (1 - STAG_W)) * 575) + 1));
+    const u = (now - merge.t0) / merge.ms, n = Math.max(0, Math.min(576, Math.floor(((u - STAG_W) / (1 - STAG_W)) * 575) + 1));
     if (n !== merge.n) { merge.n = n; merge.g.vals[merge.idx] = merge.cum[n]; dirty = true; }
   }
   if (glow) {                     // the counting pass: the band moves over the stream, the counter cube counts along
@@ -1370,33 +2119,44 @@ function frame(real) {
     if (n !== glow.n) { glow.n = n; G.CH.vals[1] = n; glow.g.write(); dirty = true; }
     if (u >= 1) { const g = glow.g; glow = null; g.write(); }
   }
-  const k = Math.min(1, (now - camT0) / camDur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-  if (k < 1) dirty = true;
-  camCur = camFrom.map((a, j) => a + (camTo[j] - a) * e);
+  if ((now - camT0) / camDur < 1) dirty = true;
+  camCur = camAt(now);
   const lk = Math.min(1, (real - lineFade.t0) / 500);
   lineMat.opacity = lineFade.from + (lineFade.to - lineFade.from) * lk; if (lk < 1) dirty = true;
   if (dirty) {
-    const panelH = $('#panel').offsetHeight, topH = $('#top').offsetHeight, H = canvas.clientHeight, visH = Math.max(H - panelH - topH, 120);
-    const vf = THREE.MathUtils.degToRad(camera.fov) / 2, hf = Math.atan(Math.tan(vf) * camera.aspect);
-    const dist = Math.max(camCur[1] / 2 / Math.tan(hf), (camCur[3] / 2 / Math.tan(vf)) * (H / visH)) * zoom;
+    const panelH = $('#panel').offsetHeight, topH = $('#top').offsetHeight, H = canvas.clientHeight;
+    const drawerW = $('#app').classList.contains('fs') && $('#drawer').classList.contains('open') ? $('#drawer').offsetWidth : 0;
+    const vf = THREE.MathUtils.degToRad(camera.fov) / 2;
+    const fit = fitCamera(camCur, H, canvas.clientWidth, panelH, topH, drawerW, vf);
+    const dist = fit.dist * zoom;
     lastDist = dist;
-    // shift the target so the scene sits in the space between the top bar and the panel; pan is the viewer's own offset
-    const yShift = -(((panelH - topH) / 2) / H) * 2 * Math.tan(vf) * dist;
-    const tx = camCur[0] + pan.x, ty = camCur[2] + yShift + pan.y, tz = pan.z;
-    camera.position.set(tx + dist * Math.sin(theta) * Math.cos(phi), ty + dist * Math.sin(phi), tz + dist * Math.cos(theta) * Math.cos(phi));
-    camera.lookAt(tx, ty, tz);
-    camera.updateMatrixWorld();
+    // near/far follow the distance: zoomed far out nothing is clipped, close up the depth buffer keeps its precision
+    const nr = Math.max(0.5, dist * 0.01), fr = dist * 4 + 3000;
+    if (camera.near !== nr || camera.far !== fr) { camera.near = nr; camera.far = fr; camera.updateProjectionMatrix(); }
+    placeCamera(fit.t.x + pan.x, fit.t.y + pan.y, fit.t.z + pan.z, dist);   // pan is the viewer's own offset
     renderer.render(scene, camera);
     drawNumbers(H, panelH, topH, vf);
     const Wd = canvas.clientWidth, key = tr ? STEPS[step].key : '';
+    const shown = [];
     for (const L of LABELS) {
       const on = tr && L.keys.includes(key) && !(L.minPh && L.minPh[key] > phase) && !(L.maxPh && L.maxPh[key] < phase) && !overview;
       if (!on) { L.el.style.display = 'none'; continue; }
       const p = L.p();
       v3.set(p[0], p[1], p[2]).project(camera);
       if (v3.z > 1) { L.el.style.display = 'none'; continue; }
-      if (L.text) L.el.textContent = L.text();
+      if (L.html) { const h = L.html(); if (h !== L.lastHtml) { L.el.innerHTML = h; L.lastHtml = h; } }   // built here, never from input
+      else if (L.text) L.el.textContent = L.text();
+      if (L.op) L.el.style.opacity = L.op();
       L.el.style.display = ''; L.el.style.left = ((v3.x + 1) / 2) * Wd + 'px'; L.el.style.top = ((1 - v3.y) / 2) * H + 'px';
+      if (L.el.textContent) shown.push(L);
+    }
+    // Captions never overlap: hot ones (what is happening now) are placed first, and any caption that would land on
+    // one already placed is hidden for this frame. A wide view shows fewer captions instead of a pile of them.
+    const placed = [];
+    for (const L of [...shown.filter(x => x.hot), ...shown.filter(x => !x.hot)]) {
+      const r = L.el.getBoundingClientRect(), hit = placed.some(q => r.left < q.right + 6 && q.left < r.right + 6 && r.top < q.bottom + 2 && q.top < r.bottom + 2);
+      L.el.style.visibility = hit ? 'hidden' : '';
+      if (!hit) placed.push(r);
     }
     dirty = false;
   }
@@ -1407,10 +2167,32 @@ function frame(real) {
 const numCv = $('#num'), nctx = numCv.getContext('2d'), wp = new THREE.Vector3();
 let numbersOn = true, lastFont = '';
 const fmtV = v => { const a = Math.abs(v); return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2); };
+// The token boxes carry their token on the front face, whenever a box is big enough on screen to read it.
+function drawTokenText(H, panelH, topH, vf, Wd) {
+  const P = G.TB.cur.p, S = G.TB.cur.s, k = H / (2 * Math.tan(vf));
+  nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
+  for (let j = 0; j < tr.T; j++) {
+    const i = j * 3;
+    if (S[i] < 0.3) continue;
+    wp.set(P[i], P[i + 1], P[i + 2] + S[i + 2] / 2 + 0.01);
+    const px = (S[i] * k) / wp.distanceTo(camera.position);
+    if (px < 16) continue;
+    v3.copy(wp).project(camera);
+    if (v3.z > 1 || Math.abs(v3.x) > 1.05 || Math.abs(v3.y) > 1.05) continue;
+    const x = ((v3.x + 1) / 2) * Wd, y = ((1 - v3.y) / 2) * H;
+    if (y > H - panelH || y < topH) continue;
+    const txt = showTok(tr.h.tokens[j]), fs = Math.min((px * 0.9) / Math.max(txt.length * 0.6, 1.8), px * 0.5);
+    if (fs < 6) continue;
+    nctx.font = `600 ${fs.toFixed(0)}px "JetBrains Mono", ui-monospace, monospace`; lastFont = '';
+    nctx.fillStyle = '#17120a';
+    nctx.fillText(txt, x, y);
+  }
+}
 function drawNumbers(H, panelH, topH, vf) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2), Wd = canvas.clientWidth;
   if (numCv.width !== Math.round(Wd * dpr) || numCv.height !== Math.round(H * dpr)) { numCv.width = Math.round(Wd * dpr); numCv.height = Math.round(H * dpr); lastFont = ''; }
   nctx.setTransform(dpr, 0, 0, dpr, 0, 0); nctx.clearRect(0, 0, Wd, H);
+  if (tr && STEPS[step].key === 'embed') drawTokenText(H, panelH, topH, vf, Wd);   // words, not numbers: always on
   if (!numbersOn || !tr) return;
   nctx.textAlign = 'center'; nctx.textBaseline = 'middle';
   const k = H / (2 * Math.tan(vf)), limitY = H - panelH;
@@ -1477,6 +2259,33 @@ function drawNumbers(H, panelH, topH, vf) {
 }
 $('#numbers').onclick = () => { numbersOn = !numbersOn; $('#numbers').setAttribute('aria-pressed', numbersOn); dirty = true; };
 $('#flow').onclick = () => { flowOn = !flowOn; $('#flow').setAttribute('aria-pressed', flowOn); if (tr) setFlows(flowsFor(step, phase)); dirty = true; };
+// Fullscreen: the page goes fullscreen (where the browser allows it; otherwise the layout alone switches), and the
+// explanation (.info and "About this trace") moves from the panel into the side drawer; leaving moves it back.
+function setFs(on) {
+  const app = $('#app'), info = $('#panel .info') || $('#drawerBody .info'), about = $('#about');
+  if (on === app.classList.contains('fs')) return;
+  app.classList.toggle('fs', on);
+  $('#fs').setAttribute('aria-pressed', on);
+  if (on) { $('#drawerBody').append(info, about); }
+  else { $('#panel').append(info, about); setDrawer(false); }
+  requestAnimationFrame(() => { resize(); dirty = true; });
+}
+function setDrawer(open) {
+  $('#drawer').classList.toggle('open', open); $('#drawerTab').setAttribute('aria-expanded', open);
+  setTimeout(() => { dirty = true; }, 300);   // the camera re-centres in the space the drawer leaves free
+}
+$('#fs').onclick = () => {
+  const on = !$('#app').classList.contains('fs'), el = document.documentElement;
+  if (on && el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (!on && document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  setFs(on);
+};
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setFs(false); });
+$('#drawerTab').onclick = () => setDrawer(!$('#drawer').classList.contains('open'));
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === 'f') $('#fs').click();
+});
 
 // Compact panel: phones start with tokens, controls, a one-line title and the plain explanation.
 function setCompact(on) {
