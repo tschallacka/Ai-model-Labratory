@@ -253,11 +253,32 @@ Earlier records, copied in as they were on 2026-11-12:
   line + key path; make append a first-class verb; guard each edit with the expected value; parse only the
   addressed line in huge files; leave YAML in text mode unless comments survive.
 
+### 14:51 · Viewer: the opening, the turn broken down, framing, fullscreen (commit bc50e2c)
+- **Michael:** start with the 30 layers and a tokenizer; keep the camera sane after a drag; centre what is
+  shown; a fullscreen mode with the text in a pull-out tab; and (Q59, Q56) break the turn down to its basic
+  parts, including why the pair is a vector, for someone who has not met vectors.
+- **What changed:** text→numbers is now five parts (30 layers, tokens, into layer 1, the lookup, into the
+  stream). The camera fits each view into the free canvas area; the later steps fit to what is actually drawn;
+  a drag eases back to the scripted view on ▶/⏭/⏮. Fullscreen (⛶ or `f`) moves the text into a drawer.
+- **The turn:** six parts in "inside a head": the pair as an arrow (along, up, length by Pythagoras), why turn
+  it (attention then sees how far apart two tokens are), how fast (2p ÷ 64, 100000 to that power, 1 ÷ it, in
+  radians and degrees), how far (place × speed, full turns + rest), the sweep itself, and cos/sin (each step
+  turned separately, then added end to end). The dial is seen face-on; a card beside it explains each stage.
+- **Checked in the browser** for token "):" (place 5, pair 0: 286.5°): every turn part played and rendered.
+  The cards use the same arithmetic as before (headDemo); the land part still compares it with the recorded
+  value, but that comparison was not re-read this time. "def" is place 0 and is not turned; the cards say so.
+- **Fixed:** the last stage of "into the stream" still pointed the camera at the tokenizer (a part index left
+  over from before the opening had its own parts).
+- **Not done:** Q61a (the multiplier rows drawn as a stack of 30, one per layer) was half written and is not in
+  this commit; Q60c (values flying instead of the yellow arrows) not started.
+
 ---
 
 ## Open threads
-- **Q50:** measure 8-bit / 4-bit SmolLM2 (size, RAM, speed, perplexity).
-- **Q51:** input-side skipping (skip weight columns for small inputs), next to docking.
+- **Q61a (chosen):** draw the multiplier rows as a stack of 30, the current layer's row lit.
+- **Q60c (chosen):** replace the yellow arrows (q k v, attend, heads out, concat, dock, down) with the values
+  flying from source to destination.
+- **Q50 → c, Q51:** parked. The focus for now is learning how LLMs work, not RAM measurements.
 - **Q52a (chosen, next):** which positions are systematically high or low across tokens; how they relate to
   the outliers and the layer-1 gains; how they behave through the layers.
 - Dishes: cut attention heads too; a per-detector greedy pass (the rank order left room); dishes for the
