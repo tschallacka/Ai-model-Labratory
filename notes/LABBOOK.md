@@ -221,6 +221,22 @@ Earlier records, copied in as they were on 2026-11-12:
   detector removed (the first kept one in layer 21) does *not* flip a token, so the rank order left room;
   8-bit rounding of all matrices flips the output on this knife's-edge dish (score change 1.03).
 
+### 01:05 · Lab notes in the repository
+- This lab book, plus copies of the brainstorm and related-work notes, committed to `notes/` (Michael: "It is
+  all gathering data, throwing stuff against the wall to see what's useful"). Entries are written as findings
+  are made, then committed and pushed.
+
+### 01:15 · Run log for every experiment script (Q54a)
+- **What:** `notes/runs.jsonl`, append-only, one JSON line per run of `mini.py`, `permute.py` and a dish's
+  `run.py`, failed runs included. A run's id is its line number, so a single run can be read without scanning
+  the file. Each script ends with a reminder on stdout: write a lab-book entry? keep the log line, whole or in
+  part? (`petri/runlog.py keep|drop <id> "why" [part ...]`). Details in `petri/DISHES.md` §7.
+- **Caught while testing:** the first version wrote absolute local paths (with the user name) into the log,
+  which goes to a public repository. Paths are now relative to `docking/`; the three test lines were discarded
+  before any commit and the log restarted.
+- **Runs 1–3** re-made `code` and `code-sorted` under the new log (same numbers as at 00:53 and ~01:00); run 2 is
+  marked keep (meter, unchanged, sortedness_after) in line 4.
+
 ---
 
 ## Open threads

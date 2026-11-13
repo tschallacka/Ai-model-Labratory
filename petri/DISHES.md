@@ -140,7 +140,35 @@ middle ones change the model's insides while the output happens to survive; the 
 last row shows the dish is on the edge for the *next detector in rank order*, not for every detector: single
 detectors can often still go, so the ranking left some room.
 
-## 7. Limits
+## 7. The run log
+
+Every run of `mini.py`, `permute.py` and a dish's `run.py` appends one line to `notes/runs.jsonl` when it
+finishes, failed runs included. It is never rewritten, only appended to.
+
+- **A run's id is its line number.** Read one run without scanning the file: open the log with ai-text-editor
+  and read just that line (or `sed -n 12p notes/runs.jsonl`).
+- **What a line holds:** time, script, arguments, git commit, and the results.
+  - `mini.py`: input, output, detectors kept (in total and per layer), margins, sizes.
+  - `permute.py`: mode, sortedness before and after, output, the meter, whether the output is unchanged.
+  - `run.py`: the dish, a fingerprint of `model.npz` (`model_npz_sha256`, so an edited dish is
+    recognisable), output, unchanged, largest score change, closest margin.
+- **Paths are relative to `docking/`**: the log is committed to a public repository.
+- **When a script calls a dish's `run.py` itself**, that inner run sets `PETRI_NO_LOG=1` and is not logged
+  separately; the outer line holds its result. Set `PETRI_NO_LOG=1` yourself to skip logging a run.
+- **A dish copied out of the lab** logs to `runs.jsonl` inside the dish folder instead.
+
+At the end of every run the script prints a reminder on stdout: the log line, whether the run deserves a
+lab-book entry in `notes/LABBOOK.md`, and whether the log line is worth keeping, whole or in part:
+
+```sh
+env/result/bin/python3 petri/runlog.py keep 2 "why it matters" meter unchanged   # keep, naming the parts that matter
+env/result/bin/python3 petri/runlog.py drop 3 "why it does not"
+env/result/bin/python3 petri/runlog.py tail 5                                    # the last 5 lines with their ids
+```
+
+A mark is a new line referring back to the run, so the log stays a complete history.
+
+## 8. Limits
 
 - A dish knows one input text. It cannot answer anything else, by design.
 - The cut is checked token by token on the recorded output ("teacher-forced"). That guarantees the same

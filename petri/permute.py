@@ -25,7 +25,8 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def main():
+def main(rec):
+    """rec collects this run's results for the run log."""
     src = os.path.join(HERE, 'dishes', sys.argv[1])
     mode = sys.argv[2] if len(sys.argv) > 2 else 'sorted'
     dst = os.path.join(HERE, 'dishes', sys.argv[3] if len(sys.argv) > 3 else f'{sys.argv[1]}-{mode}')
@@ -64,11 +65,26 @@ def main():
         r -= r.mean(1, keepdims=True)
         x = np.arange(e.shape[1]) - (e.shape[1] - 1) / 2
         return float(((r * x).sum(1) / np.sqrt((r * r).sum(1) * (x * x).sum())).mean())
-    print(f'{os.path.basename(dst)}: token rows sortedness {sortedness(emb):+.3f} -> {sortedness(W["emb"].astype(np.float64)):+.3f}')
-    r = subprocess.run([sys.executable, os.path.join(dst, 'run.py')], capture_output=True, text=True)
+    before, after = sortedness(emb), sortedness(W['emb'].astype(np.float64))
+    print(f'{os.path.basename(dst)}: token rows sortedness {before:+.3f} -> {after:+.3f}')
+    r = subprocess.run([sys.executable, os.path.join(dst, 'run.py')], capture_output=True, text=True,
+                       env=dict(os.environ, PETRI_NO_LOG='1'))      # this run's own log line holds the result
     print('output:', repr(r.stdout.strip()))
     print(r.stderr.strip())
+    rec.update({'dish': os.path.basename(dst), 'dish_path': dst, 'from': sys.argv[1], 'mode': mode,
+                'sortedness_before': round(before, 4), 'sortedness_after': round(after, 4),
+                'output': r.stdout.strip(), 'meter': r.stderr.strip(), 'unchanged': r.returncode == 0})
 
 
 if __name__ == '__main__':
-    main()
+    sys.path.insert(0, HERE)
+    from runlog import write as log_run
+    rec, status = {}, 'failed'
+    try:
+        main(rec)
+        status = 'ok'
+    except BaseException as e:                       # a failed run is logged too, with how far it got
+        rec['error'] = repr(e)
+        raise
+    finally:
+        log_run('permute.py', dict(rec, status=status))

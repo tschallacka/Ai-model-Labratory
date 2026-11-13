@@ -84,15 +84,41 @@ for _ in range(len(M['output_ids'])):
     out.append(nxt)
     if nxt in (0, 2):                                     # <|endoftext|>, <|im_end|>
         break
-print(''.join(M['vocab_strings'][ROW[t]] for t in out))
+text = ''.join(M['vocab_strings'][ROW[t]] for t in out)
+print(text)
 # The change meter: how far the scores moved from the ones recorded when the dish was made, and how close
 # the tightest decision is. A truly harmless edit moves nothing (up to float rounding, ~1e-5).
 s = scores()
 top2 = np.sort(s, -1)[:, -2:]
-meter = f'closest decision wins by {float((top2[:, 1] - top2[:, 0]).min()):.4f}'
-if os.path.exists(REF):
-    meter = f'largest score change vs the original: {float(np.abs(s - np.load(REF)).max()):.2e} · ' + meter
+margin = float((top2[:, 1] - top2[:, 0]).min())
+change = float(np.abs(s - np.load(REF)).max()) if os.path.exists(REF) else None
+meter = (f'largest score change vs the original: {change:.2e} · ' if change is not None else '') + f'closest decision wins by {margin:.4f}'
 print(meter, file=sys.stderr)
-if out != M['output_ids']:
-    sys.exit('OUTPUT CHANGED: differs from the one recorded when this dish was made')
-print('output unchanged', file=sys.stderr)
+unchanged = out == M['output_ids']
+print('output unchanged' if unchanged else 'OUTPUT CHANGED: differs from the one recorded when this dish was made', file=sys.stderr)
+
+# The run log (see petri/runlog.py): one JSON line per run, its line number is its id. Written to the lab's
+# notes/runs.jsonl when this dish still sits in the lab, otherwise to runs.jsonl inside the dish.
+if not os.environ.get('PETRI_NO_LOG'):
+    import hashlib
+    import time
+    lab = os.path.abspath(os.path.join(D, '..', '..', '..', 'notes', 'runs.jsonl'))
+    log = lab if os.path.isdir(os.path.dirname(lab)) else os.path.join(D, 'runs.jsonl')
+    h = hashlib.sha256()
+    with open(os.path.join(D, 'model.npz'), 'rb') as f:
+        for chunk in iter(lambda: f.read(1 << 20), b''):
+            h.update(chunk)
+    entry = {'time': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'script': 'run.py', 'argv': sys.argv[1:],
+             'dish': M['name'], 'dish_path': os.path.relpath(D, os.path.dirname(os.path.dirname(lab))) if log == lab else os.path.basename(D),
+             'model_npz_sha256': h.hexdigest()[:16],
+             'output': text, 'unchanged': unchanged, 'largest_score_change': change, 'closest_margin': margin}
+    with open(log, 'a') as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+    with open(log) as f:
+        n = sum(1 for _ in f)
+    print(f'\n[run log] written: {log} line {n} (run id {n}).')
+    print('[run log] REMINDER: is this worth a lab-book entry in notes/LABBOOK.md (question, method, numbers, '
+          'conclusion)? Is the log line worth keeping, whole or in part?')
+    print(f'[run log]   keep: petri/runlog.py keep {n} "why" [part ...]   ·   drop: petri/runlog.py drop {n} "why"')
+if not unchanged:
+    sys.exit(1)

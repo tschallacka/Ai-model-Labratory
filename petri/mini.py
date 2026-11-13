@@ -35,7 +35,8 @@ STOP = {0, 2}   # <|endoftext|>, <|im_end|>
 
 
 @torch.no_grad()
-def main():
+def main(rec):
+    """rec collects this run's results for the run log as they become known."""
     name = sys.argv[1] if len(sys.argv) > 1 else 'code'
     prompts = {p['name']: p['text'] for p in json.load(open(os.path.join(HERE, 'prompts.json')))['prompts']}
     text = sys.argv[2] if len(sys.argv) > 2 else prompts[name]
@@ -54,6 +55,7 @@ def main():
             break
     out = seq[P:]
     print(f'input {P} tokens -> output {len(out)} tokens: {tok.decode(out)!r}', flush=True)
+    rec.update({'dish': name, 'input': text, 'input_tokens': P, 'output': tok.decode(out), 'output_tokens': len(out)})
 
     # 2. the dish's vocabulary
     vocab = sorted(set(seq))
@@ -99,6 +101,8 @@ def main():
     kept = sum(len(k) for k in keep)
     print(f'kept {kept} of {L * F} FFN units ({kept / (L * F) * 100:.1f}%) in {time.time() - t0:.0f}s; '
           f'smallest winning margin {margin:.2f} (uncut {full_margin:.2f})', flush=True)
+    rec.update({'ffn_units_kept': kept, 'ffn_units_full': L * F, 'cut_seconds': round(time.time() - t0, 1),
+                'smallest_winning_margin': round(margin, 4), 'uncut_margin': round(full_margin, 4)})
 
     # 4. save, then prove the saved dish gives the same output
     m = tm.np_model
@@ -132,10 +136,11 @@ def main():
         }
         json.dump(meta, open(os.path.join(dish, 'dish.json'), 'w'), indent=1, ensure_ascii=False)
         shutil.copy(os.path.join(HERE, 'dish_run.py'), os.path.join(dish, 'run.py'))
-        r = subprocess.run([sys.executable, os.path.join(dish, 'run.py')], capture_output=True, text=True)
+        inner = dict(os.environ, PETRI_NO_LOG='1')    # this run's own log line holds the result
+        r = subprocess.run([sys.executable, os.path.join(dish, 'run.py')], capture_output=True, text=True, env=inner)
         if r.returncode == 0:
             # the change meter's baseline: this dish's own scores, as saved
-            subprocess.run([sys.executable, os.path.join(dish, 'run.py'), '--record'], check=True)
+            subprocess.run([sys.executable, os.path.join(dish, 'run.py'), '--record'], check=True, env=inner)
             break
         print(f'{np.dtype(dtype).name} weights did not reproduce the output ({r.stderr.strip()}); trying float32', flush=True)
     else:
@@ -144,7 +149,20 @@ def main():
     print(f'saved {dish}: {meta["params_total"]:,} of {meta["params_full_total"]:,} numbers '
           f'({meta["params_total"] / meta["params_full_total"] * 100:.1f}%), model.npz {size / 1e6:.1f} MB as {meta["dtype"]}')
     print(f'run.py says: {r.stdout.strip()!r}')
+    rec.update({'dish_path': dish, 'vocab_tokens': len(vocab), 'ffn_units_kept_per_layer': meta['ffn_units_kept_per_layer'],
+                'params_total': meta['params_total'], 'params_full_total': meta['params_full_total'],
+                'params_kept_pct': round(meta['params_total'] / meta['params_full_total'] * 100, 2),
+                'model_npz_mb': round(size / 1e6, 1), 'dtype': meta['dtype'], 'saved_dish_reproduces_output': True})
 
 
 if __name__ == '__main__':
-    main()
+    from runlog import write as log_run
+    rec, status = {}, 'failed'
+    try:
+        main(rec)
+        status = 'ok'
+    except BaseException as e:                       # a failed run is logged too, with how far it got
+        rec['error'] = repr(e)
+        raise
+    finally:
+        log_run('mini.py', dict(rec, status=status))
