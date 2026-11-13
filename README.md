@@ -32,6 +32,11 @@ serves no binary file types.
 changes exactly when the content does. After a deploy, the live `version.json` matching the local one
 means the new build is being served.
 
+## Lab notes
+
+[notes/LABBOOK.md](notes/LABBOOK.md) records every tangent, method and finding with timestamps, including the
+dead ends. [notes/](notes/) also holds the brainstorm that set up the measurements and the related-work notes.
+
 ## Petri dishes
 
 `petri/mini.py` cuts the model down to what one input text needs for its own output, into a small folder
