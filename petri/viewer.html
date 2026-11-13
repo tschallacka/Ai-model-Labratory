@@ -77,7 +77,13 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
 #panel.compact #stats { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 #track { font: 12px/1.5 var(--mono); color: var(--fg); background: #2a2230; border: 1px solid var(--accent); border-radius: 6px; padding: 4px 8px; }
 #track .dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; background: #fff0f8; box-shadow: 0 0 6px var(--accent); margin-right: 6px; vertical-align: 0; }
-#track button { padding: 0 6px; margin-left: 6px; font-size: 12px; }
+#track button { padding: 0 6px; margin-left: 6px; font-size: 12px; float: right; }
+#track ol.steps { margin: 4px 0 0; padding-left: 22px; }
+#track ol.steps li { padding: 2px 4px; border-radius: 4px; color: var(--muted, #aaa); }
+#track ol.steps li.now { background: #3a2a40; color: var(--fg); }
+#track ol.steps .sn { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; opacity: .75; }
+#track ol.steps b { color: #fff0f8; }
+#track ol.steps i { display: block; font-style: normal; font-size: 11px; opacity: .65; }
 @media (max-width: 640px) {
   .brand small { display: none; }
   .brand { font-size: 15px; }
@@ -679,14 +685,27 @@ function renderUI() {
     const k = selIdx, rin = deq('resid', l, t, 576)[k], ad = deq('attn_delta', l, t, 576)[k], fd = deq('ffn_delta', l, t, 576)[k];
     let line;
     if (key === 'head' && W) {
-      const d = headDemo(l, t, demoHead);
-      line = `position #${k}: arrives as ${f3(d.x[k])} → volume knob ${f3(d.xf[k])} → × its multiplier ${f3(d.g[k])} = ${f3(d.n[k])} → × weight ${f3(d.wa[k])} = ${f3(d.pa[k])}, one of the 576 parts of the sum`;
+      const d = headDemo(l, t, demoHead), f = d.factor.toFixed(3);
+      const turns = Math.floor(d.ang / (2 * Math.PI)), rest = (d.ang - turns * 2 * Math.PI) * 180 / Math.PI;
+      const turnTxt = (turns ? `${turns} whole turn${turns > 1 ? 's' : ''} + ` : '') + `${rest.toFixed(1)}°`;
+      // One row per sub-part of the step; [sub-parts it belongs to, name, sum]. The current sub-part is highlighted.
+      const rows = [
+        [[0], 'arrives', `the stream holds <b>${f3(d.x[k])}</b> here`],
+        [[1], 'loudness adjustment', `${f3(d.x[k])} × ${f} = <b>${f3(d.xf[k])}</b><i>${f} = 1 ÷ the average size of all 576 numbers, the same for every position</i>`],
+        [[2, 3], 'trained multiplier', `${f3(d.xf[k])} × ${f3(d.g[k])} = <b>${f3(d.n[k])}</b><i>learned during training, one fixed number per position</i>`],
+        [[4, 5], `weight (head ${demoHead}, pair ${d.p})`, `${f3(d.n[k])} × ${f3(d.wa[k])} = <b>${f3(d.pa[k])}</b>`],
+        [[6], 'add up', `${f3(d.pa[k])} is 1 of the 576 parts; all 576 added = <b>${f3(d.a)}</b>`],
+        [[7], 'turn', `with its partner ${f3(d.b)}, turned ${turnTxt} → <b>${f3(d.qa)}</b>`],
+        [[8], 'land', `question number ${2 * d.p} = <b>${f3(d.qa)}</b><i>recorded by the real model: ${f3(d.recA)}</i>`],
+      ];
+      line = `position #${k}, step by step<ol class="steps">` +
+        rows.map(([ps, name, sum]) => `<li${ps.includes(phase) ? ' class="now"' : ''}><span class="sn">${name}</span>${sum}</li>`).join('') + '</ol>';
     } else if (['qkv', 'attend', 'headsout'].includes(key)) {
       line = `question block ${Math.floor(k / 64)}, number ${k % 64}: question ${f3(deq('q', l, t, 64, Math.floor(k / 64), 9)[k % 64])} → what it found ${f3(deq('ho', l, t, 64, Math.floor(k / 64), 9)[k % 64])} · after "concat" it sits at stream position #${k}`;
     } else {
       line = `position #${k}: in ${f3(rin)} · attention adds ${f3(ad)} → ${f3(rin + ad)} · detectors add ${f3(fd)} → out ${f3(rin + ad + fd)}`;
     }
-    tk.innerHTML = `<span class="dot"></span>${line} <button id="untrack" aria-label="Stop tracking">×</button>`;
+    tk.innerHTML = `<button id="untrack" aria-label="Stop tracking">×</button><span class="dot"></span>${line}`;
     $('#untrack').onclick = () => setSel(-1);
   }
 }
