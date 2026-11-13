@@ -370,7 +370,7 @@ const G = {
   // along it, 41: the side of the square, or the cut; 42: the overhang cut off; 43..: its bits). Each multiply row k has
   // A (left board; row 0 uses the stream R itself), B (right board), S (the empty pair slots) and P (the products).
   NS: new Group(2, 0.8), SA: new Group(576, 0.8), SB: new Group(576, 0.8), CH: new Group(6, 0.8), RS: new Group(RS_N, 1),
-  MT: new Group(1, 1),                                             // the multiplier row: one per layer
+  MT: new Group(30, 1),                                            // the multiplier rows: one per layer, 30 stacked
   WT: new Group(64, 1),                                            // the weight table: one question block's 64 rows
   FS: new Group(576, 1),                                           // the empty slots a table row is folded into
   // the opening: LB the 30 layer boxes (see-through), MC the tokenizer (body, intake, outlet), TB the token boxes
@@ -481,7 +481,10 @@ const turnPt = f => () => (W && tr ? f(headDemo(layer, tok, demoHead)) : [DIALX,
 // layer's one row of 576 learned multipliers (the norm's gain). The lifter stands beside both.
 const WTX = 128, WTY0 = -52, WTS = 0.58, wtY = r => WTY0 - r * WTS, MTY = WTY0 + 8, DUDEX = 100, DUDEY = MTY - 9;
 const stripPos = (i, y, z) => [WTX - 16 + ((i + 0.5) * 32) / 576, y, z];   // a row's 576 values along its slab at height y
-const WTCAM = [WTX - 2, 76, WTY0 - 13, 54], MTCAM = [WTX - 6, 60, MTY - 4, 26];
+// The multiplier rows: one per layer, 30 stacked upward from MTY (layer 1 at the bottom). A token in layer l uses
+// row l, whatever the token: the row is picked by layer, never by token.
+const mtY = k => MTY + k * WTS;
+const WTCAM = [WTX - 2, 76, WTY0 - 13, 54], MTCAM = [WTX - 6, 66, MTY + 6, 36];
 // A row's 576 values folded the way every board lays them out: 32 to a line, 18 lines, value i on line i ÷ 32 at
 // place i mod 32. The table is 32 wide too, so the fold stands in front of it (under the multiplier row for row 2).
 const foldY = k => (k === 2 ? MTY - 13 : wtY(30)), foldPos = (i, k) => [WTX + (i % 32) - 15.5, foldY(k) + 8.5 - Math.floor(i / 32), 5];
@@ -593,7 +596,7 @@ function openingScene(ph, sub, ebOn) {
   G.TB.vals.fill(0);
   // layer 1's storage: the lookup table (drawn by buildState), the weight tables and the multiplier rows
   for (let r = 0; r < 64; r++) G.WT.set(r, [WTX, wtY(r), 0], ebOn ? [32, 0.4, 1.0] : 0, SLAB);
-  G.MT.set(0, [WTX, MTY, 0], ebOn ? [32, 0.4, 1.0] : 0, SLAB);
+  for (let k = 0; k < 30; k++) G.MT.set(k, [WTX, mtY(k), 0], ebOn ? [32, 0.4, 1.0] : 0, SLAB);
   return segs;
 }
 
@@ -713,7 +716,7 @@ const LABELS = [
   { t: '', p: () => [WBC[0], WBC[1] + WBS[1] / 2 - 14, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, hot: true,
     text: () => (stageTag() === 'enter' ? 'inside layer 1: its storage · the tables it reads from' : '') },
   { t: '', p: () => [WTX, WTY0 + 2.4, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, text: () => (stageTag() === 'enter' ? 'weight tables' : '') },
-  { t: '', p: () => [WTX, MTY + 2.2, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, text: () => (stageTag() === 'enter' ? 'multiplier rows' : '') },
+  { t: '', p: () => [WTX, mtY(29) + 2.2, 0], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 2 }, text: () => (stageTag() === 'enter' ? 'multiplier rows · one per layer' : '') },
   { t: 'the lookup table · one row per token · 49,152 rows × 576', p: () => [EX, 21.6, 0], keys: ['embed'], minPh: { embed: 2 } },
   { t: '', p: () => [EX, 32.4, 1], keys: ['embed'], minPh: { embed: 2 }, maxPh: { embed: 3 }, text: () => (stageTag() === 'inside' || stageTag() === 'fetch' ? 'the tokens, in order' : '') },
   // the lookup: the followed token's box says what it looks for and which row it is passing
@@ -764,7 +767,10 @@ const LABELS = [
   { t: '', p: () => [WTX - 16, WTY0 + 2.4, 0], keys: ['head'], minPh: { head: 9 }, side: true, text: () => (atTable() ? `the weight table of layer 1 · question block ${demoHead}: 64 rows of 576 weights, one row per number` : '') },
   { t: '', p: () => [WTX + 17, wtY(qNum(0)), 0], keys: ['head'], minPh: { head: 9 }, hot: true, side: true,
     text: () => (!W || !tr || !atTable() ? '' : phase >= 12 ? `row ${qNum(1)} → makes number ${qNum(1)}, the partner of number ${qNum(0)}` : `row ${qNum(0)} → makes number ${qNum(0)}`) },
-  { t: '', p: () => [WTX - 16, MTY + 2.2, 0], keys: ['head'], minPh: { head: 7 }, side: true, text: () => (atTable() ? 'the multiplier row of layer 1 · 576 multipliers, loaded from the model · the same for every token' : '') },
+  { t: '', p: () => [WTX - 16, mtY(29) + 2.2, 0], keys: ['head'], minPh: { head: 7 }, side: true,
+    text: () => (atTable() ? 'the multiplier rows: 30, one per layer · 576 multipliers each, loaded from the model' : '') },
+  { t: '', p: () => [WTX + 17, mtY(layer), 0], keys: ['head'], minPh: { head: 7 }, hot: true, side: true,
+    text: () => (atTable() && stageK() === 2 ? `layer ${layer + 1}'s row: the same for every token in layer ${layer + 1}` : '') },
   { t: '', p: () => [DUDEX, DUDEY - 1.8, 0], keys: ['head'], minPh: { head: 7 }, text: () => (atTable() ? 'he lifts them · we multiply by them' : '') },
   // the fold: an empty grid in a board's layout, then the row's values fill it in order; the corners say which value
   // goes where
@@ -1009,9 +1015,11 @@ function headScene(d, ph, sub) {
     const lit = (r === 2 * d.p && wt >= 1) || (r === 2 * d.p + 1 && wt >= 2);
     G.WT.set(r, [WTX, wtY(r), 0], wt ? [32, 0.4, 1.0] : 0, lit ? DOCK : SLAB);
   }
-  G.MT.set(0, [WTX, MTY, 0], ph >= 7 || (sub && sub.k === 2) ? [32, 0.4, 1.0] : 0, DOCK);
+  // the 30 multiplier rows, one per layer; this layer's row lit: the row is picked by layer, never by token
+  const mtOn = ph >= 7 || (sub && sub.k === 2);
+  for (let k = 0; k < 30; k++) G.MT.set(k, [WTX, mtY(k), 0], mtOn ? [32, 0.4, 1.0] : 0, k === layer ? DOCK : SLAB);
   if (sub && sub.strip) {
-    const k = sub.strip, Bk = G['B' + k], y = k === 2 ? MTY : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), vs = rows[k].B, bS = robust(vs) || 1;
+    const k = sub.strip, Bk = G['B' + k], y = k === 2 ? mtY(layer) : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), vs = rows[k].B, bS = robust(vs) || 1;
     for (let i = 0; i < 576; i++) Bk.set(i, stripPos(i, y, sub.lifted ? 3 : 0.8), [SLIVER, 0.45, 0.45], valColor(vs[i] / bS));
   }
   // the fold: first an empty grid of slots in a board's layout (sub.grid), then the row's values fill it in order
@@ -1062,7 +1070,7 @@ function headScript(ph) {
   // to the multiply row's right board. Nothing on a board appears from nowhere: it is loaded from here, or computed.
   // x: extra scene flags for every stage (row 4 keeps its already-copied left board shown: keepA)
   const fromTable = (k, x = {}) => {
-    const wt = k === 3 ? 1 : k === 4 ? 2 : 0, y = k === 2 ? MTY : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), Bn = 'B' + k;
+    const wt = k === 3 ? 1 : k === 4 ? 2 : 0, y = k === 2 ? mtY(layer) : wtY(k === 3 ? 2 * d.p : 2 * d.p + 1), Bn = 'B' + k;
     add(1300, { k, st: 'hidden', wt, ...x }, { cam: k === 2 ? MTCAM : WTCAM, camMs: 1200, tag: 'table' });
     add(1100, { k, st: 'hidden', wt, strip: k, ...x }, { pre: () => { for (let i = 0; i < 576; i++) setCur(G[Bn], i, stripPos(i, y, 0.8), 0); }, stag: { [Bn]: STAG }, tag: 'row' });
     add(800, { k, st: 'hidden', wt, strip: k, lifted: true, ...x }, { tag: 'lift' });
@@ -1689,7 +1697,7 @@ function renderUI() {
         `1 ÷ ${fmtH(d.rt)} = <b>${d.factor.toFixed(3)}</b> · that is the volume knob`,
         `volume knob: every number × ${d.factor.toFixed(3)} · a quiet row is turned up, a loud row down · the shape does not change`,
         (() => { const gm = Array.from(d.g, Math.abs).sort((a, b) => a - b)[288], neg = d.g.filter(v => v < 0).length, big = d.g.filter(v => Math.abs(v) > 10 * gm).length;
-          return `loaded from the model: layer ${l + 1}'s one row of 576 learned multipliers, the same for every token · from ${f3(Math.min(...d.g))} to ${f3(Math.max(...d.g))}, middle size ${gm.toFixed(3)} · ${neg} are negative (they flip the sign) · ${big} are over 10× the middle size`; })(),
+          return `loaded from the model, which keeps 30 rows of 576 learned multipliers, one per layer: layer ${l + 1} uses row ${l + 1}, the same for every token · from ${f3(Math.min(...d.g))} to ${f3(Math.max(...d.g))}, middle size ${gm.toFixed(3)} · ${neg} are negative (they flip the sign) · ${big} are over 10× the middle size`; })(),
         (() => { const top = Array.from(d.n.keys()).sort((a, b) => Math.abs(d.n[b]) - Math.abs(d.n[a]))[0], rank = Array.from(d.x.keys()).sort((a, b) => Math.abs(d.x[b]) - Math.abs(d.x[a])).indexOf(top) + 1;
           return `after the multipliers the biggest is #${top}: ${f3(d.xf[top])} × ${f3(d.g[top])} = <b>${f3(d.n[top])}</b> · on arrival it was only the ${rank}${rank === 1 ? 'st' : rank === 2 ? 'nd' : rank === 3 ? 'rd' : 'th'} biggest`; })(),
         `the model keeps a row of 576 weights for each of the 64 numbers of a question block, one weight per stream number · this row makes number ${2 * d.p} of question block ${demoHead}; its partner, number ${2 * d.p + 1}, comes after the sum`,

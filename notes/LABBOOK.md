@@ -269,13 +269,18 @@ Earlier records, copied in as they were on 2026-11-12:
   value, but that comparison was not re-read this time. "def" is place 0 and is not turned; the cards say so.
 - **Fixed:** the last stage of "into the stream" still pointed the camera at the tokenizer (a part index left
   over from before the opening had its own parts).
-- **Not done:** Q61a (the multiplier rows drawn as a stack of 30, one per layer) was half written and is not in
-  this commit; Q60c (values flying instead of the yellow arrows) not started.
+- **Not done:** Q60c (values flying instead of the yellow arrows) not started.
+
+### 15:10 · Viewer: the multiplier rows as a stack of 30 (Q61a)
+- **Michael:** make it visible that the multipliers are picked by layer, not by token.
+- **What changed:** layer 1's storage now holds 30 multiplier rows, stacked upward, one per layer. In "the
+  multipliers" the current layer's row is lit and its 576 values come out of that row; the captions say the row
+  is the same for every token in that layer.
+- **Checked in the browser** at layer 1 (bottom row lit) and layer 5 (fifth row lit).
 
 ---
 
 ## Open threads
-- **Q61a (chosen):** draw the multiplier rows as a stack of 30, the current layer's row lit.
 - **Q60c (chosen):** replace the yellow arrows (q k v, attend, heads out, concat, dock, down) with the values
   flying from source to destination.
 - **Q50 → c, Q51:** parked. The focus for now is learning how LLMs work, not RAM measurements.
