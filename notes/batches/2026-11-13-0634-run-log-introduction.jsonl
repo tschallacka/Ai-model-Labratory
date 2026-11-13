@@ -1,0 +1,2 @@
+{"batch": "run-log-introduction", "started": "2026-11-13T01:14:20+0100", "closed": "2026-11-13T06:34:24+0100", "runs": 3, "kept": 1, "dropped": 0, "unmarked": 2}
+{"run_id": 2, "why": "reordering all 576 positions keeps the output; score change 2.17e-06 is rounding", "parts": ["meter", "unchanged", "sortedness_after"], "run": {"time": "2026-11-13T01:14:23+0100", "script": "permute.py", "dish": "code-sorted", "sortedness_after": 0.321, "meter": "largest score change vs the original: 2.17e-06 · closest decision wins by 0.0098\noutput unchanged", "unchanged": true}}

@@ -235,7 +235,20 @@ Earlier records, copied in as they were on 2026-11-12:
   which goes to a public repository. Paths are now relative to `docking/`; the three test lines were discarded
   before any commit and the log restarted.
 - **Runs 1–3** re-made `code` and `code-sorted` under the new log (same numbers as at 00:53 and ~01:00); run 2 is
-  marked keep (meter, unchanged, sortedness_after) in line 4.
+  marked keep (meter, unchanged, sortedness_after) in line 4. Saved at 06:34 as
+  [batches/2026-11-13-0634-run-log-introduction.jsonl](batches/2026-11-13-0634-run-log-introduction.jsonl).
+
+### 06:34 · The run log becomes per-batch scratch
+- **Michael:** the log is git-ignored and started fresh before each batch (a tangent, idea, experiment,
+  proof or falsification attempt), with the relevant parts kept next to the notes.
+- **What changed:** `runlog.py start "…"` (refuses while the previous batch is open) and
+  `runlog.py close [name]`, which writes only the kept runs, and only their kept parts, to
+  `notes/batches/<date-time>-<name>.jsonl`. `notes/runs.jsonl` left git. Manual: `petri/DISHES.md` §7.
+- **Tested:** the refusal while a batch is open, a drop, and a close with 0 kept (that test batch file was
+  deleted). The 01:14 log was closed as the first batch file (1 kept, 2 unmarked).
+- **Not done:** a peer session asked for a review of an ai-text-editor structured-edit RFC in chat
+  `#ai-skills`. Joining was blocked by Claude Code's permission check, and the chat server refused the
+  connection.
 
 ---
 
