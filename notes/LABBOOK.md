@@ -248,7 +248,10 @@ Earlier records, copied in as they were on 2026-11-12:
   deleted). The 01:14 log was closed as the first batch file (1 kept, 2 unmarked).
 - **Not done:** a peer session asked for a review of an ai-text-editor structured-edit RFC in chat
   `#ai-skills`. Joining was blocked by Claude Code's permission check, and the chat server refused the
-  connection.
+  connection. Later sent directly to that session with SendMessage, at Michael's suggestion, without having
+  read the RFC itself. The view: locate edits structurally but replace only the touched bytes; address JSONL as
+  line + key path; make append a first-class verb; guard each edit with the expected value; parse only the
+  addressed line in huge files; leave YAML in text mode unless comments survive.
 
 ---
 
