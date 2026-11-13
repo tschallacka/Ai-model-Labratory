@@ -24,6 +24,7 @@ body { background: var(--bg); color: var(--fg); font: 14px/1.45 var(--body); ove
 .lbl { position: absolute; transform: translate(-50%, -100%); font: 500 12px var(--display); color: var(--muted);
   white-space: nowrap; letter-spacing: 0.02em; text-shadow: 0 1px 3px var(--bg); }
 .lbl.hot { color: var(--fg); }
+.lbl.side { transform: translate(0, -50%); }     /* starts at its point and reads to the right: captions beside a block */
 header#top { position: absolute; top: 0; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
   padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 8px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -52,6 +53,7 @@ section#panel { position: absolute; left: 0; right: 0; bottom: 0; background: va
 .ctrl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 /* Progress through the current step, like a video bar: one segment per part (chapters), drag to scrub. */
 #seekRow { display: flex; align-items: center; gap: 10px; }
+#play { width: 36px; height: 30px; padding: 0; font-size: 14px; line-height: 1; flex: none; }
 #seek { position: relative; flex: 1; height: 20px; cursor: pointer; touch-action: none; }
 #seekSegs { position: absolute; left: 0; right: 0; top: 8px; height: 4px; display: flex; gap: 3px; transition: top 0.1s, height 0.1s; }
 #seek:hover #seekSegs, #seek.drag #seekSegs { top: 7px; height: 6px; }
@@ -129,6 +131,7 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
   <section id="panel">
     <div id="tokens" role="listbox" aria-label="Token to follow"></div>
     <div id="seekRow">
+      <button id="play" aria-label="Play" title="Play / pause (space) · , and . step one frame">▶</button>
       <div id="seek" role="slider" aria-label="Position in this step: drag to scrub; , and . step one stage" tabindex="0">
         <div id="seekSegs"></div><div id="seekThumb"></div><div id="seekTip" hidden></div>
       </div>
@@ -136,9 +139,8 @@ details#about div { max-width: 72ch; padding-top: 4px; display: grid; gap: 3px; 
     </div>
     <div class="ctrl">
       <div class="grp">
-        <button id="prev" aria-label="Previous step">◀</button>
-        <button id="play" aria-label="Play">Play</button>
-        <button id="next" aria-label="Next step">▶</button>
+        <button id="prev" aria-label="Previous part" title="Previous part (←)">⏮</button>
+        <button id="next" aria-label="Next part" title="Next part (→)">⏭</button>
         <button id="detail" aria-expanded="true" aria-controls="panel">Less</button>
       </div>
       <div class="grp"><label for="layer">Layer</label><input id="layer" type="range" min="0" max="29" value="0"><span class="num" id="layerNum">1/30</span></div>
@@ -283,7 +285,7 @@ class Group {
         else if (this.name !== 'EB') { r *= 0.35; g *= 0.35; b *= 0.35; }
       }
       // counting pass: a bright band runs over the stream while the counter cube counts its cells
-      if (glow && this === G.R && i < glow.n && i >= glow.n - 40) { const w = 0.8 * (1 - (glow.n - 1 - i) / 40); r += (1 - r) * w; g += (0.95 - g) * w; b += (0.6 - b) * w; }
+      if (glow && this === glow.g && i < glow.n && i >= glow.n - 40) { const w = 0.8 * (1 - (glow.n - 1 - i) / 40); r += (1 - r) * w; g += (0.95 - g) * w; b += (0.6 - b) * w; }
       m.makeScale(sx, sy, sz);
       m.setPosition(P[j], P[j + 1], P[j + 2]);
       this.mesh.setMatrixAt(i, m);
@@ -297,10 +299,11 @@ const G = {
   R: new Group(576, 0.8), Q: new Group(576, 0.8), K: new Group(192, 0.8), V: new Group(192, 0.8),
   TK: new Group(96, 1), B: new Group(48, 1), F: new Group(576, 0.8),
   EB: new Group(48, 1),                                            // embedding table, drawn as 48 slabs
-  // inside a head: NS the sum and its partner; SA/SB the pair copies flying into the slots; CH/CF the volume-knob
-  // chain (its values and their slot frames). Each multiply row k has A (left board; row 0 uses the stream R itself),
+  // inside a head: NS the sum and its partner; SA/SB the pair copies flying into the slots; CH the volume-knob column
+  // (0 sum, 1 count, 2 mean, 3 root, 4 one, 5 knob); RS its pictures (0: the ruler "1", 1-40: pieces of the root laid
+  // along it, 41: the side of the square). Each multiply row k has A (left board; row 0 uses the stream R itself),
   // B (right board), S (the empty pair slots) and P (the products).
-  NS: new Group(2, 0.8), SA: new Group(576, 0.8), SB: new Group(576, 0.8), CH: new Group(9, 0.8), CF: new Group(3, 1),
+  NS: new Group(2, 0.8), SA: new Group(576, 0.8), SB: new Group(576, 0.8), CH: new Group(6, 0.8), RS: new Group(42, 1),
 };
 for (let k = 0; k < 4; k++) {
   if (k) G['A' + k] = new Group(576, 0.8);
@@ -312,7 +315,7 @@ for (const [k, g] of Object.entries(G)) { g.name = k; g.linked = ['R', 'Q', 'F',
 const MERGE_MS = 4200, HOLD = C3('#ffd76a');
 let merge = null;   // { g, idx, cum (running totals in fly order), t0, n }
 const fmtH = v => (Number.isInteger(v) ? String(v) : Math.abs(v) >= 100 ? v.toFixed(1) : Math.abs(v) >= 1e-3 ? v.toPrecision(4) : v.toExponential(2));
-const FRAME = C3('#343e4d');
+const FRAME = C3('#343e4d'), PLATE = C3('#8a7330'), RULER = C3('#d6dce6'), PIECE_B = C3('#e0a83c'), SIDE = C3('#ff5ea8');
 // a wave from the top-left corner, for slots appearing and the final pop of a whole board
 const STAG_DIAG = Float32Array.from({ length: 576 }, (_, i) => (((i % 32) + Math.floor(i / 32)) / 48) * (1 - STAG_W));
 // Spawning: a new cube starts where its parent is (mitosis), so it visibly comes out of it.
@@ -351,27 +354,29 @@ function setLines(segs) {
 // ---------- layout ----------
 const EX = -64, BX = 48, CX = 86, DX = 116, FX = 166, GX = 214;
 // Inside a head: four multiply rows (square, knob, multipliers, weights) at RY, each a left board (XL), the pair slots
-// (centre, SPX apart) and a right board (XR). The volume-knob chain runs down a column at XC, left of the stream.
-const RY = [0, -24, -48, -72], SPX = 2.2, XL = -55, XR = 55, XC = -82, SY = -89, DIALX = XC + 13, DIALR = 6;
-const CHAIN_P = [[XC, 6.5], [XC + 1.8, 1.9], [XC - 1.8, 1.9], [XC, 1.9], [XC - 1.8, -2.7], [XC, -2.7], [XC - 1.8, -7.3], [XC + 1.8, -7.3], [XC, -7.3]];
-const CHAIN_FY = [1.9, -2.7, -7.3];
+// (centre, SPX apart) and a right board (XR). The volume knob is worked out in a column centred under the squares
+// (levels CY: sum · mean · root · knob); row 1 starts below it. The final sum sits centred under row 3, the turn below.
+const RY = [0, -56, -80, -104], SPX = 2.2, XL = -55, XR = 55, CY = [-13, -19, -26, -33], RULY = -29.6;
+const SUMY = RY[3] - 13, SY = RY[3] - 24, DIALX = 13, DIALR = 6;
 // In the head step the question block the pair lands in is drawn beside the dial (its usual place is under row 0).
 const LANDX = DIALX + 20, landCell = i => [LANDX + (i % 8) - 3.5, SY + 3.5 - Math.floor(i / 8), 0];
 const gridPos = (i, x0, y0, z = 0) => [x0 + (i % 32) - 15.5, y0 + 8.5 - Math.floor(i / 32), z];
 const residPos = (i, x0, z = 0) => gridPos(i, x0, 0, z);
 const slotPos = (i, y0, side = 0) => [((i % 32) - 15.5) * SPX + side * 0.47, y0 + 8.5 - Math.floor(i / 32), 0];
-// The camera looks from the left at an angle, so the views sit left of centre to keep the chain column (XC) in frame.
-function rowView(k) { return k === 0 ? [-22, 184, RY[0], 24] : [-22, 184, (RY[k - 1] + RY[k]) / 2, 50]; }
+// The camera looks from the left at an angle, so the wide views sit a little left of centre.
+function rowView(k) { return k === 0 ? [-6, 164, RY[0], 24] : k === 1 ? [-6, 164, -27, 82] : [-6, 164, (RY[k - 1] + RY[k]) / 2, 50]; }
 function headCam(ph) {
   if (ph === 0) return [0, 40, 0, 30];
-  if (ph <= 2) return rowView(0);
-  if (ph <= 5) return [XC + 18, 52, RY[0], 22];          // the chain, and the stream it counts
+  if (ph === 1) return rowView(0);
+  if (ph <= 3) return [0, 82, -7, 36];                    // the squares, and the column under them
+  if (ph === 4) return [0, 34, CY[1] - 2, 20];
+  if (ph === 5) return [0, 34, CY[2] - 3, 20];
   if (ph === 6) return rowView(1);
   if (ph <= 8) return rowView(2);
   if (ph <= 10) return rowView(3);
-  if (ph === 11) return [-46, 120, RY[3], 26];            // the sum holder, the left board, and the products
-  if (ph === 12) return [(XC + DIALX) / 2, 34, SY, 24];
-  return [(XC + LANDX + 4) / 2, LANDX + 10 - XC, SY, 26];
+  if (ph === 11) return [0, 82, RY[3] - 6, 36];
+  if (ph === 12) return [DIALX / 2, 34, SY, 24];
+  return [LANDX / 2, LANDX + 14, SY, 26];
 }
 // A bar from a flat base: positive sticks out toward the viewer, negative goes back into the screen.
 function barSet(g, i, p, v, sc) {
@@ -497,10 +502,13 @@ const LABELS = [
   { t: 'the stream', p: () => [XL, RY[0] + 10.5, 0], keys: ['head'], minPh: { head: 1 } },
   { t: 'its twin: a copy', p: () => [XR, RY[0] + 10.5, 0], keys: ['head'], minPh: { head: 1 } },
   { t: 'pairs: each number × its twin = its square · all positive', p: () => [0, RY[0] + 10.5, 0], keys: ['head'], minPh: { head: 1 }, hot: true },
-  { t: '', p: () => [XC + 3, RY[0] + 9.6, 0], keys: ['head'], minPh: { head: 2 }, maxPh: { head: 6 }, hot: true, text: () => knobText() },
-  { t: '÷ count', p: () => [XC - 6.6, RY[0] + CHAIN_FY[0] - 0.4, 0], keys: ['head'], minPh: { head: 3 } },
-  { t: '√', p: () => [XC + 1.8, RY[0] + CHAIN_FY[1] - 0.4, 0], keys: ['head'], minPh: { head: 4 }, hot: true },
-  { t: '1 ÷', p: () => [XC - 6.6, RY[0] + CHAIN_FY[2] - 0.4, 0], keys: ['head'], minPh: { head: 5 } },
+  // the volume-knob column: one caption beside each level, saying what happens there now.
+  // Gone once row 1 starts: from there the camera is pulled back and row 1's caption names the knob.
+  { t: '', p: () => [5.8, CY[0], 0], keys: ['head'], minPh: { head: 2 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(0) },
+  { t: '', p: () => [3.4, CY[1], 0], keys: ['head'], minPh: { head: 3 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(1) },
+  { t: '', p: () => [5.8, CY[2], 0], keys: ['head'], minPh: { head: 4 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(2) },
+  { t: '', p: () => [6, RULY, 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, side: true, text: () => chainText(3) },
+  { t: '', p: () => [3.4, CY[3], 0], keys: ['head'], minPh: { head: 5 }, maxPh: { head: 5 }, hot: true, side: true, text: () => chainText(4) },
   // row 1: the volume knob
   { t: 'the stream again', p: () => [XL, RY[1] + 10.5, 0], keys: ['head'], minPh: { head: 6 } },
   { t: '', p: () => [XR, RY[1] + 10.5, 0], keys: ['head'], minPh: { head: 6 }, text: () => (W && tr ? `the knob, 576 copies of ${headDemo(layer, tok, demoHead).factor.toFixed(3)}` : 'the knob') },
@@ -513,7 +521,7 @@ const LABELS = [
   { t: 'after the multipliers', p: () => [XL, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 } },
   { t: '', p: () => [XR, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, text: () => `one row of 576 weights · question block ${demoHead}` },
   { t: 'each number × its weight', p: () => [0, RY[3] + 10.5, 0], keys: ['head'], minPh: { head: 9 }, hot: true },
-  { t: '', p: () => [XC + 3, RY[3] + 9.6, 0], keys: ['head'], minPh: { head: 11 }, maxPh: { head: 11 }, hot: true, text: () => sumText() },
+  { t: '', p: () => [9, SUMY, 0], keys: ['head'], minPh: { head: 11 }, maxPh: { head: 11 }, hot: true, side: true, text: () => sumText() },
   { t: 'the pair as an arrow · grey before, pink after the turn', p: () => [DIALX, SY + DIALR + 2.5, 0], keys: ['head'], minPh: { head: 12 }, maxPh: { head: 12 }, hot: true },
   { t: '', p: () => [LANDX, SY + 5.5, 0], keys: ['head'], minPh: { head: 13 }, hot: true, text: () => `lands in question block ${demoHead}` },
   { t: 'the stream', p: () => [DX, 10.5, 0], keys: ['add', 'dock'] },
@@ -526,7 +534,7 @@ const LABELS = [
   { t: 'detectors · 48 blocks of 32', p: () => [FX, 13, 0], keys: ['dock', 'down'] },
   { t: 'their answer · 576', p: () => [GX, -10, 2], keys: ['down'] },
 ];
-for (const L of LABELS) { L.el = document.createElement('div'); L.el.className = 'lbl' + (L.hot ? ' hot' : ''); L.el.textContent = L.t; $('#labels').appendChild(L.el); }
+for (const L of LABELS) { L.el = document.createElement('div'); L.el.className = 'lbl' + (L.hot ? ' hot' : '') + (L.side ? ' side' : ''); L.el.textContent = L.t; $('#labels').appendChild(L.el); }
 
 // The inside-a-head arithmetic, done here from the weights file and checked against the recorded trace.
 function wrow(name, idx, n) { const arr = W.a[name], s = W.a[name + '_scale'][idx], o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = arr[idx * n + i] * s; return o; }
@@ -546,21 +554,48 @@ function headDemo(l, t, h) {
     xf: x.map(v => v * factor), g, n, p, wa, pa, a, b, imax, ang, qa: a * c - b * s, qb: a * s + b * c, recA: rec[2 * p], recB: rec[2 * p + 1], rec };
 }
 
-// Captions for the two value holders; while a merge runs they count along with the cubes arriving.
+// Captions for the volume-knob column and the sum; while a stage runs they follow it (stage tags, see headScript).
 const counting = () => merge && merge.n < 576;
-function knobText() {
+const stageTag = () => (play && !play.done && play.s === step ? play.stages[play.i].tag || null : null);
+const stageU = () => (play && !play.done ? Math.min(1, Math.max(0, (vnow() - play.t0) / Math.max(1, play.stages[play.i].ms))) : 1);
+const nPieces = d => Math.max(1, Math.min(40, Math.ceil(d.factor - 1e-9)));   // pieces of the root laid along the "1"
+function chainText(lv) {
   if (!W || !tr) return '';
-  const d = headDemo(layer, tok, demoHead), k = d.factor.toFixed(3);
-  if (phase === 2) return counting() ? `adding up the squares: ${merge.n} of 576 · so far ${fmtH(merge.cum[merge.n])}` : `all 576 squares added = ${fmtH(d.ss)}`;
-  return { 3: `${fmtH(d.ss)} ÷ 576 = ${fmtH(d.ms)} · the average square`, 4: `√${fmtH(d.ms)} = ${fmtH(d.rt)} · the typical size`,
-    5: `1 ÷ ${fmtH(d.rt)} = ${k} · the volume knob`, 6: `the knob: every number × ${k}` }[phase] || '';
+  const d = headDemo(layer, tok, demoHead), tag = stageTag(), ss = fmtH(d.ss), ms = fmtH(d.ms), rt = fmtH(d.rt), k = d.factor.toFixed(3);
+  if (lv === 0) {
+    if (phase === 2) return counting() ? `adding up the squares: ${merge.n} of 576 · so far ${fmtH(merge.cum[merge.n])}` : `all 576 squares added = ${ss}`;
+    if (tag === 'count') return `counting the squares: ${glow ? glow.n : 576}`;
+    if (tag === 'hit') return `${ss} ÷ 576`;
+    return `${ss} ÷ 576 = ${ms}: the average square`;
+  }
+  if (lv === 1) {
+    if (tag === 'area') return `picture ${ms} as the area of a square`;
+    if (tag === 'side') return `its side is ${rt}, because ${rt} × ${rt} = ${ms}`;
+    return phase >= 4 && tag !== 'hit' && tag !== 'count' ? `√${ms} = ${rt}: the side of that square` : '';
+  }
+  if (lv === 2) {
+    if (phase < 5) return '';
+    return tag === 'one' || tag === 'ruler' || tag === 'fit' ? `1 ÷ ${rt}: how many ${rt}s fit into 1?` : `1 ÷ ${rt}`;
+  }
+  if (lv === 3) {
+    if (phase < 5 || tag === 'one') return '';
+    if (tag === 'ruler') return 'this bar is 1 long';
+    if (tag === 'fit') {
+      const N = nPieces(d), u = stageU(), got = Math.max(0, Math.min(N, Math.floor(((u - STAG_W) / (1 - STAG_W)) * Math.max(N - 1, 1)) + 1));
+      return `laying ${rt}s along it: ${got}`;
+    }
+    return `${rt} fits ${k} times into 1: ${Math.floor(d.factor)} whole, plus ${(d.factor - Math.floor(d.factor)).toFixed(3)} of one`;
+  }
+  if (phase < 5 || tag === 'one' || tag === 'ruler' || tag === 'fit') return '';
+  return phase === 6 ? `the knob: every number × ${k}` : `= ${k}: the volume knob`;
 }
 function sumText() {
   if (!W || !tr) return '';
   const d = headDemo(layer, tok, demoHead);
   return counting() ? `adding up the 576 parts: ${merge.n} of 576 · so far ${f3(merge.cum[merge.n])}`
-    : `all 576 added = ${f3(d.a)} · below: its partner, same recipe = ${f3(d.b)}`;
+    : `all 576 added = ${f3(d.a)} · beside it: its partner, same recipe = ${f3(d.b)}`;
 }
+
 
 // ---------- inside a head: the scene ----------
 // Four multiply rows. Each: left board × right board, pair by pair, in the slots between them; products stay there.
@@ -599,24 +634,35 @@ function headScene(d, ph, sub) {
     drawRow(k, rows[k], live ? sub.st : rowState(k, ph), live ? sub.m || 0 : 0, live);
   }
   if (sub && sub.fly) for (let i = 0; i < 576; i++) G.SA.set(i, sub.fly, 0, null);   // copies flying into a holder
-  // the volume-knob chain: Σ squares, then [count | Σ] ÷, then [mean | √], then [1 | root] ÷; each result stays
-  const cv = [d.ss, d.ss, 576, d.ms, d.ms, d.rt, 1, d.rt, d.factor];
-  const on = sub && sub.chain ? sub.chain.on : ph >= 5 ? [0, 3, 5, 8] : ph === 4 ? [0, 3, 5] : ph === 3 ? [0, 3] : ph === 2 ? [0] : [];
-  const frames = sub && sub.chain ? sub.chain.frames : Math.max(0, Math.min(3, ph - 2));
-  const INTO = { 1: 3, 2: 3, 4: 5, 6: 8, 7: 8 };       // operands squash into their result's spot when it pops
-  for (let j = 0; j < 9; j++) {
-    const q = !on.includes(j) && INTO[j] != null && on.includes(INTO[j]) ? CHAIN_P[INTO[j]] : CHAIN_P[j];
-    G.CH.set(j, [q[0], RY[0] + q[1], 1], on.includes(j) ? 3.6 : 0, HOLD);
+  // The volume-knob column, centred under the squares at levels CY. c says what is on screen at the end of this part;
+  // a stage overrides parts of it (sub.chain).
+  const c = { sum: ph >= 2, sumX: ph >= 3 ? -2.2 : 0, count: ph >= 3, countX: 2.2, mean: ph >= 3 ? 'cube' : null, edge: null,
+    root: ph >= 4, rootX: ph >= 5 ? 2.2 : 0, one: ph >= 5, ruler: ph >= 5, pieces: ph >= 5, knob: ph >= 5 };
+  if (sub && sub.chain) Object.assign(c, sub.chain);
+  const plate = c.mean === 'plate';
+  G.CH.set(0, [c.sumX, CY[0], 1], c.sum ? 3.6 : 0, HOLD);
+  G.CH.set(1, [c.countX, CY[0], 1], c.count ? 3.6 : 0, HOLD);
+  G.CH.set(2, [0, CY[1], plate ? 0.3 : 1], plate ? [6.25, 6.25, 0.25] : c.mean ? 3.6 : 0, plate ? PLATE : HOLD);   // the mean, or its square
+  G.CH.set(3, [c.rootX, CY[2], 1], c.root ? 3.6 : 0, HOLD);
+  G.CH.set(4, [-2.2, CY[2], 1], c.one ? 3.6 : 0, HOLD);
+  G.CH.set(5, [0, CY[3], 1], c.knob ? 3.6 : 0, HOLD);
+  G.CH.vals.set([d.ss, 576, d.ms, d.rt, 1, d.factor]);
+  // 1 ÷ root as "how many roots fit into 1": the 1 is a bar 10 long, the pieces are the root's length on that scale
+  G.RS.set(0, [0, RULY, 0.4], c.ruler ? [10, 0.45, 0.45] : 0, RULER);
+  const seg = 10 * d.rt, N = nPieces(d);
+  for (let j = 0; j < 40; j++) {
+    const at = j * seg, len = Math.max(0.05, Math.min(seg, 10 - at));
+    G.RS.set(1 + j, [-5 + at + len / 2, RULY, 0.85], c.pieces && j < N ? [len * 0.94, 0.75, 0.75] : 0, j % 2 ? PIECE_B : HOLD);
   }
-  G.CH.vals.set(cv);
-  for (let r = 0; r < 3; r++) G.CF.set(r, [XC, RY[0] + CHAIN_FY[r], -0.6], r < frames ? [7.6, 4, 0.2] : 0, FRAME);
-  // the sum and its partner, then the turn, then the landing
-  const sumScale = Math.max(Math.abs(d.a), Math.abs(d.b), Math.abs(d.qa), Math.abs(d.qb)) || 1, hold = [XC, RY[3] + 6.5, 1];
+  // the side of the square: lit along the bottom edge, then dropping down to become the root
+  G.RS.set(41, c.edge === 'drop' ? [0, CY[2], 1] : [0, CY[1] - 2.5, 0.6], c.edge === 'show' ? [5, 0.35, 0.35] : 0, SIDE);
+  // the sum and its partner (centred under row 3), then the turn, then the landing
+  const sumScale = Math.max(Math.abs(d.a), Math.abs(d.b), Math.abs(d.qa), Math.abs(d.qb)) || 1, hold = [0, SUMY, 1];
   if (ph === 11) {
-    G.NS.set(0, hold, 3.6, HOLD); G.NS.set(1, [XC, RY[3] + 1.6, 1], 2.6, valColor(d.b / sumScale));
+    G.NS.set(0, hold, 3.6, HOLD); G.NS.set(1, [4.4, SUMY, 1], 2.6, valColor(d.b / sumScale));
     G.NS.vals[0] = d.a; G.NS.vals[1] = d.b;
   } else if (ph === 12) {
-    G.NS.set(0, [XC - 1.2, SY, 0], 1.8, valColor(d.qa / sumScale)); G.NS.set(1, [XC + 1.2, SY, 0], 1.8, valColor(d.qb / sumScale));
+    G.NS.set(0, [-1.2, SY, 0], 1.8, valColor(d.qa / sumScale)); G.NS.set(1, [1.2, SY, 0], 1.8, valColor(d.qb / sumScale));
     G.NS.vals[0] = d.qa; G.NS.vals[1] = d.qb;
   } else if (ph === 13) {
     G.NS.set(0, landCell(2 * d.p), 1.15, valColor(d.qa / sumScale)); G.NS.set(1, landCell(2 * d.p + 1), 1.15, valColor(d.qb / sumScale));
@@ -625,8 +671,11 @@ function headScene(d, ph, sub) {
   if (ph === 12) segs.push(...dialSegs(d));
   return segs;
 }
+const curPos = (g, i) => [g.cur.p[i * 3], g.cur.p[i * 3 + 1], g.cur.p[i * 3 + 2]];
+function setCur(g, i, p, s) { for (let a = 0; a < 3; a++) { g.cur.p[i * 3 + a] = p[a]; g.cur.s[i * 3 + a] = s; } }
 // A part as a sequence of stages, played when stepping forward into it. Each stage: { ms, sub (scene), pre (spawns,
-// before the move starts), stag/back (per group name), cam, camMs, merge [group, idx, values], glow }.
+// before the move starts), stag/back (per group name), cam, camMs, merge [group, idx, values], glow (group counted),
+// tag (what the captions say during it) }.
 function headScript(ph) {
   if (!W || !tr) return null;
   const d = headDemo(layer, tok, demoHead), S = [];
@@ -649,28 +698,32 @@ function headScript(ph) {
     add(1000, { k, st: 'pop', m: 28 }, { cam: rowView(k) });                      // zoom out
     add(1500, { k, st: 'pop', m: 576 }, { back: [P], stag: { SA: STAG_DIAG, SB: STAG_DIAG, [P]: STAG_DIAG } });   // the rest at once
   };
+  const N = nPieces(d), stagPieces = Float32Array.from({ length: 42 }, (_, j) => (j >= 1 && j <= N ? ((j - 1) / Math.max(N - 1, 1)) * (1 - STAG_W) : 0));
   switch (ph) {
     case 1: setup(0, () => copyCur(G.B0, G.R)); multiply(0); break;              // the stream splits in two: itself and a twin
-    case 2: add(MERGE_MS, { fly: [XC, RY[0] + 6.5, 1] }, { pre: () => copyCur(G.SA, G.P0), stag: { SA: STAG }, merge: [G.CH, 0, d.sq] }); break;
-    case 3:
-      add(900, { chain: { on: [0, 1], frames: 1 } }, { pre: () => copyOne(G.CH, 0, 1) });   // the sum divides, a copy drops into the slot
-      add(2200, { chain: { on: [0, 1, 2], frames: 1 } }, { glow: true });                     // count the stream's cells
-      add(900, { chain: { on: [0, 3], frames: 1 } }, { back: ['CH'] });                        // Σ ÷ count, pop
+    case 2: add(MERGE_MS, { fly: [0, CY[0], 1] }, { pre: () => copyCur(G.SA, G.P0), stag: { SA: STAG }, merge: [G.CH, 0, d.sq] }); break;
+    case 3:   // the sum steps left; on the right a block grows while the squares are counted; they hit; the average is born
+      add(2400, { chain: { mean: null } }, { glow: G.P0, tag: 'count' });
+      add(450, { chain: { sumX: -1.45, countX: 1.45, mean: null } }, { tag: 'hit' });
+      add(1000, { chain: {} }, { pre: () => setCur(G.CH, 2, [0, CY[0], 1], 0.4), back: ['CH'], tag: 'born' });
       break;
-    case 4:
-      add(900, { chain: { on: [0, 3, 4], frames: 2 } }, { pre: () => copyOne(G.CH, 3, 4) });
-      add(900, { chain: { on: [0, 3, 5], frames: 2 } }, { back: ['CH'] });
+    case 4:   // the square root: the average as the area of a square; its side is the answer
+      add(1000, { chain: { mean: 'plate', root: false } }, { tag: 'area' });
+      add(1100, { chain: { mean: 'plate', root: false, edge: 'show' } }, { tag: 'side' });
+      add(1100, { chain: { edge: 'drop' } }, { pre: () => setCur(G.CH, 3, [0, CY[1] - 2.5, 1], 0.4), back: ['CH'], tag: 'born' });
       break;
-    case 5:
-      add(900, { chain: { on: [0, 3, 5, 6, 7], frames: 3 } }, { pre: () => copyOne(G.CH, 5, 7) });
-      add(900, { chain: { on: [0, 3, 5, 8], frames: 3 } }, { back: ['CH'] });
+    case 5:   // 1 ÷ root: a 1 slides in, becomes a bar 1 long, and pieces of the root's length are laid along it
+      add(1000, { chain: { ruler: false, pieces: false, knob: false } }, { pre: () => setCur(G.CH, 4, [-14, CY[2], 1], 3.6), tag: 'one' });
+      add(900, { chain: { pieces: false, knob: false } }, { pre: () => setCur(G.RS, 0, curPos(G.CH, 4), 0.5), tag: 'ruler' });
+      add(2800, { chain: { knob: false } }, { pre: () => { const p = curPos(G.CH, 3); for (let j = 1; j <= 40; j++) setCur(G.RS, j, p, 0.3); }, stag: { RS: stagPieces }, tag: 'fit' });
+      add(1000, { chain: {} }, { pre: () => setCur(G.CH, 5, [0, RULY, 1], 0.4), back: ['CH'], tag: 'born' });
       break;
-    case 6: setup(1, () => { copyCur(G.A1, G.R); copyPoint(G.B1, G.CH, 8); }); multiply(1); break;   // the knob divides into 576
+    case 6: setup(1, () => { copyCur(G.A1, G.R); copyPoint(G.B1, G.CH, 5); }); multiply(1); break;   // the knob divides into 576
     case 7: setup(2, () => copyCur(G.A2, G.P1)); break;
     case 8: multiply(2); break;
     case 9: setup(3, () => copyCur(G.A3, G.P2)); break;
     case 10: multiply(3); break;
-    case 11: add(MERGE_MS, { fly: [XC, RY[3] + 6.5, 1] }, { pre: () => copyCur(G.SA, G.P3), stag: { SA: STAG }, merge: [G.NS, 0, d.pa] }); break;
+    case 11: add(MERGE_MS, { fly: [0, SUMY, 1] }, { pre: () => copyCur(G.SA, G.P3), stag: { SA: STAG }, merge: [G.NS, 0, d.pa] }); break;
     default: return null;
   }
   return S;
@@ -688,7 +741,7 @@ function runStage(into = 0) {
     for (let i = 0; i < 576; i++) cum[i + 1] = cum[i] + src[i];
     merge = { g, idx, cum, t0: now, n: 0 }; g.vals[idx] = 0;
   }
-  if (st.glow) { glow = { t0: now, ms: st.ms, n: 0 }; G.CH.vals[2] = 0; }
+  if (st.glow) { glow = { g: st.glow, t0: now, ms: st.ms, n: 0 }; G.CH.vals[1] = 0; }
   setLines(segs); setFlows(flowsFor(play.s, play.ph));
   if (st.ms === 0) lineFade.from = lineFade.to;
   const cam = st.cam || (play.i === 0 ? (overview ? [(EX + GX) / 2, 300, 0, 26] : STEPS[play.s].cam(play.ph)) : null);
@@ -821,8 +874,10 @@ function apply(s, ph, dur) {
   phase = ph; merge = null; glow = null;
   if (s !== lastStepShown) { pan.set(0, 0, 0); lastStepShown = s; }   // a new step re-centres; a new token keeps the view
   const scripted = forward && !overview && STEPS[s].key === 'head' ? headScript(ph) : null;
-  // A part without a script is one stage: a single move to its end state, dur ms long (0: at once).
+  // A part without a script is one stage: a single move to its end state, dur ms long (0: at once). A part that
+  // animates ends with a hold, so Play lingers on the result; the timeline counts the same stages.
   const stages = scripted && scripted.length ? scripted : [{ ms: dur, sub: null }];
+  if (dur > 0) stages.push(HOLD_STAGE());
   play = { s, ph, stages, i: 0, t: 0, t0: 0 };
   runStage();
   renderUI();
@@ -843,104 +898,121 @@ function go(newStep, animate = true, ph = 0) {
   busyUntil = vnow() + (animate ? d + 50 : 0);
 }
 
-// ---------- the step as a timeline: parts are chapters, stages are frames ----------
-// A part takes as long as it plays when stepped into forward (its script, or one 650 ms move).
+// ---------- the layer as one timeline: steps are chapters, parts follow each other, stages are frames ----------
+// A part takes as long as it plays when stepped into forward (its script, or one 650 ms move), plus a hold.
+const HOLD_MS = 1300, HOLD_STAGE = () => ({ ms: HOLD_MS, sub: null, hold: true });
 let tline = null;
 function timeline() {
-  const k = `${step}|${layer}|${tok}|${demoHead}|${demoPair}|${!!W}|${overview}`;
+  const k = `${layer}|${tok}|${demoHead}|${demoPair}|${!!W}|${overview}`;
   if (tline && tline.k === k) return tline;
-  const parts = [];
-  for (let p = 0; p < STEPS[step].phases; p++) {
-    const sc = !overview && STEPS[step].key === 'head' ? headScript(p) : null, st = sc && sc.length ? sc : [{ ms: 650, sub: null }];
-    parts.push({ st, ms: st.reduce((a, x) => a + x.ms, 0) });
-  }
-  tline = { k, parts, total: parts.reduce((a, p) => a + p.ms, 0) };
+  const items = [], steps = [];
+  let at = 0;
+  STEPS.forEach((S, s) => {
+    if (!stepAvail(s)) return;
+    const from = at;
+    for (let p = 0; p < S.phases; p++) {
+      const sc = !overview && S.key === 'head' ? headScript(p) : null;
+      const st = [...(sc && sc.length ? sc : [{ ms: 650, sub: null }]), HOLD_STAGE()], ms = st.reduce((a, x) => a + x.ms, 0);
+      items.push({ s, p, st, ms, at }); at += ms;
+    }
+    steps.push({ s, at: from, ms: at - from });
+  });
+  tline = { k, items, steps, total: at };
   buildSeekBar();
   return tline;
 }
-// Where the step is now: [part, ms into it]. A part entered by a jump plays one short move; it is scaled onto the part.
+// Where the layer is now, in ms. A part entered by a jump plays one short move; it is scaled onto the part.
 function position() {
-  const tl = timeline();
-  if (!play || play.s !== step || !tl.parts[play.ph]) return [phase, tl.parts[phase] ? tl.parts[phase].ms : 0];
+  const it = timeline().items.find(x => x.s === step && x.p === phase);
+  if (!it) return 0;
+  if (!play || play.s !== step || play.ph !== phase) return it.at + it.ms;
   const total = play.stages.reduce((a, x) => a + x.ms, 0), st = play.stages[play.i];
   const done = play.stages.slice(0, play.i).reduce((a, x) => a + x.ms, 0) + Math.min(st.ms, Math.max(0, vnow() - play.t0));
-  return [play.ph, total ? (tl.parts[play.ph].ms * done) / total : tl.parts[play.ph].ms];
+  return it.at + (total ? (it.ms * done) / total : it.ms);
 }
-const partStart = p => timeline().parts.slice(0, p).reduce((a, x) => a + x.ms, 0);
-// Show the step at time T: the state just before the stage T falls in, then that stage started T-into-it ago.
+// Show the layer at time T: the state just before the stage T falls in, then that stage started T-into-it ago.
 function seekTime(T) {
   const tl = timeline();
   T = Math.max(0, Math.min(tl.total, T));
-  let p = 0;
-  while (p < tl.parts.length - 1 && T > tl.parts[p].ms) { T -= tl.parts[p].ms; p++; }
-  const st = tl.parts[p].st;
-  let i = 0;
-  while (i < st.length - 1 && T > st[i].ms) { T -= st[i].ms; i++; }
-  phase = p; lastApplied = [step, p]; merge = null; glow = null;
-  const camBefore = j => { for (let k = j; k >= 0; k--) if (st[k].cam) return st[k].cam; return STEPS[step].cam(p); };
-  if (i > 0) snap(p, st[i - 1].sub, camBefore(i - 1));
-  else snap(Math.max(0, p - 1), null, STEPS[step].cam(Math.max(0, p - 1)));
-  play = { s: step, ph: p, stages: st, i, t: 0, t0: 0 };
-  runStage(Math.min(T, st[i].ms));
-  busyUntil = vnow() + st.slice(i).reduce((a, x) => a + x.ms, 0) - Math.min(T, st[i].ms);
+  let n = tl.items.findIndex(x => T <= x.at + x.ms);
+  if (n < 0) n = tl.items.length - 1;
+  const it = tl.items[n], st = it.st;
+  let t = T - it.at, i = 0;
+  while (i < st.length - 1 && t > st[i].ms) { t -= st[i].ms; i++; }
+  step = it.s; phase = it.p; lastApplied = [step, phase]; merge = null; glow = null;
+  if (step !== lastStepShown) { pan.set(0, 0, 0); lastStepShown = step; }
+  const camBefore = j => { for (let k = j; k >= 0; k--) if (st[k].cam) return st[k].cam; return STEPS[step].cam(phase); };
+  const prev = tl.items[n - 1];
+  if (i > 0) snap(step, phase, st[i - 1].sub, camBefore(i - 1));
+  else if (prev) snap(prev.s, prev.p, null, STEPS[prev.s].cam(prev.p));
+  else snap(step, phase, null, STEPS[step].cam(phase));
+  play = { s: step, ph: phase, stages: st, i, t: 0, t0: 0 };
+  runStage(Math.min(t, st[i].ms));
   renderUI();
 }
-function snap(ph, sub, cam) {          // jump straight to a state, no movement
-  const segs = buildState(step, ph, sub), now = vnow();
+function snap(s, ph, sub, cam) {       // jump straight to a state, no movement
+  const segs = buildState(s, ph, sub), now = vnow();
   for (const g of Object.values(G)) { g.begin(0, now); g.step(now); }
   setLines(segs); lineFade.from = lineFade.to;
   camFrom = cam.slice(); camTo = cam.slice(); camCur = cam.slice(); camT0 = now - 1e6;
 }
-// , and . (also < and >): one stage back or forward, paused, like frame-stepping a video.
+// , and . (also < and >): one stage back or forward, paused, like frame-stepping a video. The hold at the end of a
+// part is not a frame of its own: the step lands on the part's last stage.
 function stageStep(dir) {
   stopPlay(); setPaused(true); overview = false;
-  const tl = timeline(), [p, ms] = position(), T = partStart(p) + ms, ends = [0];
-  let acc = 0;
-  for (const part of tl.parts) for (const st of part.st) { acc += st.ms; ends.push(acc); }
+  const tl = timeline(), T = position(), ends = [0];
+  for (const it of tl.items) {
+    let acc = it.at;
+    it.st.forEach((st, j) => { acc += st.ms; if (!(it.st[j + 1] && it.st[j + 1].hold)) ends.push(acc); });
+  }
   const to = dir > 0 ? ends.find(b => b > T + 1) : [...ends].reverse().find(b => b < T - 1);
   if (to != null) return seekTime(to);
-  if (dir > 0) advance();                                            // past the end: the next step, held at its start
-  else if (step > 0 || phase > 0 || layer > 0) { stepBack(); seekTime(timeline().total); }   // before the start: the previous step's end
+  if (dir > 0) advance();                                            // past the end: the next layer, held at its start
+  else if (layer > 0) { stepBack(); seekTime(timeline().total); }     // before the start: the previous layer's end
 }
 function buildSeekBar() {
-  const box = $('#seekSegs'), names = PARTS[STEPS[step].key] || [STEPS[step].short];
+  const box = $('#seekSegs');
   box.textContent = '';
-  tline.parts.forEach((p, i) => {
-    const d = document.createElement('div'); d.className = 'sg'; d.style.flexGrow = Math.max(p.ms, 300);
-    d.dataset.name = `${i + 1}. ${names[i] || STEPS[step].t}`; d.appendChild(document.createElement('i')); box.appendChild(d);
-  });
+  for (const st of tline.steps) {
+    const d = document.createElement('div'); d.className = 'sg'; d.style.flexGrow = Math.max(st.ms, 1500);
+    d.appendChild(document.createElement('i')); box.appendChild(d);
+  }
   lastSeek = '';
 }
 const fmtT = ms => { const s = Math.floor(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 let lastSeek = '';
 function updateSeek() {
   if (!tr) return;
-  const tl = timeline(), [p, ms] = position(), key = `${p}|${Math.round(ms)}|${tl.k}`;
+  const tl = timeline(), T = position(), key = `${Math.round(T)}|${tl.k}`;
   if (key === lastSeek) return;
   lastSeek = key;
-  const segs = $('#seekSegs').children, f = tl.parts[p] && tl.parts[p].ms ? ms / tl.parts[p].ms : 1;
-  for (let i = 0; i < segs.length; i++) segs[i].firstChild.style.width = (i < p ? 100 : i > p ? 0 : f * 100).toFixed(2) + '%';
-  if (segs[p]) { const r = segs[p].getBoundingClientRect(), br = $('#seek').getBoundingClientRect(); $('#seekThumb').style.left = (r.left - br.left + r.width * f) + 'px'; }
-  $('#seekTime').textContent = `${fmtT(partStart(p) + ms)} / ${fmtT(tl.total)}`;
+  const segs = $('#seekSegs').children, br = $('#seek').getBoundingClientRect();
+  tl.steps.forEach((st, i) => {
+    const f = Math.min(1, Math.max(0, (T - st.at) / st.ms));
+    segs[i].firstChild.style.width = (f * 100).toFixed(2) + '%';
+    if (T >= st.at && (T < st.at + st.ms || i === tl.steps.length - 1)) {
+      const r = segs[i].getBoundingClientRect(); $('#seekThumb').style.left = (r.left - br.left + r.width * f) + 'px';
+    }
+  });
+  $('#seekTime').textContent = `${fmtT(T)} / ${fmtT(tl.total)}`;
 }
-function seekAt(x) {                   // a point on the bar -> a time: the segment under it, and how far along it
+function seekAt(x) {                   // a point on the bar -> a time: the step segment under it, and how far along it
   const tl = timeline(), segs = [...$('#seekSegs').children];
-  let T = 0;
   for (let i = 0; i < segs.length; i++) {
     const r = segs[i].getBoundingClientRect();
-    if (x <= r.right + 1.5 || i === segs.length - 1) { T += tl.parts[i].ms * Math.min(1, Math.max(0, (x - r.left) / r.width)); break; }
-    T += tl.parts[i].ms;
+    if (x <= r.right + 1.5 || i === segs.length - 1) return tl.steps[i].at + tl.steps[i].ms * Math.min(1, Math.max(0, (x - r.left) / r.width));
   }
-  return T;
+  return 0;
 }
 {
   const bar = $('#seek'), tip = $('#seekTip');
   let drag = null;
   const showTip = x => {
-    const seg = [...$('#seekSegs').children].find(s => x <= s.getBoundingClientRect().right + 1.5) || $('#seekSegs').lastChild;
-    if (!seg) return;
-    const br = bar.getBoundingClientRect();
-    tip.textContent = seg.dataset.name; tip.hidden = false; tip.style.left = Math.min(Math.max(x - br.left, 40), br.width - 40) + 'px';
+    const T = seekAt(x), it = timeline().items.find(q => T <= q.at + q.ms) || timeline().items.at(-1);
+    if (!it) return;
+    const names = PARTS[STEPS[it.s].key], br = bar.getBoundingClientRect();
+    tip.textContent = `${STEPS[it.s].short}${names ? ' · ' + names[it.p] : ''} · ${fmtT(T)}`;
+    tip.hidden = false; tip.style.left = Math.min(Math.max(x - br.left, 60), br.width - 60) + 'px';
   };
   bar.addEventListener('pointerdown', e => {
     if (!tr) return;
@@ -955,6 +1027,8 @@ function seekAt(x) {                   // a point on the bar -> a time: the segm
     if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); stageStep(e.key === 'ArrowRight' ? 1 : -1); }
   });
 }
+
+// ---------- UI ----------
 
 // ---------- UI ----------
 const fmtPct = x => (x * 100).toFixed(1) + '%';
@@ -1122,14 +1196,14 @@ $('#prev').onclick = () => { stopPlay(); setPaused(false); overview = false; ste
 $('#next').onclick = () => { stopPlay(); setPaused(false); overview = false; advance(); };
 $('#layer').oninput = e => { layer = +e.target.value; if (!stepAvail(step)) step = SI.in; go(step, false, phase); };
 $('#overview').onclick = () => { overview = !overview; $('#overview').textContent = overview ? 'Follow step' : 'Whole layer'; go(step, false, phase); };
-let playTimer = null;
-function stopPlay() { if (playTimer) { clearInterval(playTimer); playTimer = null; $('#play').textContent = 'Play'; } }
-// Play runs the clock and moves on part by part; Pause stops the clock, so the animation holds mid-move.
+// ▶ / ❚❚ (like a video): Play runs the clock and moves on by itself when a part (and its hold) is done; Pause stops
+// the clock, so an animation holds mid-move.
+let autoplay = false;
+function setAuto(on) { autoplay = on; $('#play').textContent = on ? '❚❚' : '▶'; $('#play').setAttribute('aria-label', on ? 'Pause' : 'Play'); }
+function stopPlay() { setAuto(false); }
 $('#play').onclick = () => {
-  if (playTimer) { stopPlay(); setPaused(true); return; }
-  setPaused(false); $('#play').textContent = 'Pause'; overview = false;
-  const hold = matchMedia('(prefers-reduced-motion: reduce)').matches ? 2400 : 1500;
-  playTimer = setInterval(() => { if (vnow() >= busyUntil + hold && !advance()) stopPlay(); }, 200);
+  if (autoplay && !paused) { setAuto(false); setPaused(true); return; }
+  overview = false; setPaused(false); setAuto(true);
 };
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
@@ -1216,7 +1290,7 @@ canvas.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.max(0.04
 function setSel(i) { selIdx = i; for (const g of Object.values(G)) g.write(); dirty = true; renderUI(); }
 const ray = new THREE.Raycaster();
 const PICK = { R: 'stream', Q: 'question', K: 'label (key)', V: 'content (value)', F: 'detectors\' answer', NS: 'sum', SA: 'left of the pair', SB: 'right of the pair',
-  CH: 'value', CF: 'slot', B0: 'twin (copy of the stream)', P0: 'square', A1: 'stream', B1: 'knob', P1: 'after the knob', A2: 'after the knob',
+  CH: 'value', RS: 'picture of the sum', B0: 'twin (copy of the stream)', P0: 'square', A1: 'stream', B1: 'knob', P1: 'after the knob', A2: 'after the knob',
   B2: 'learned multiplier', P2: 'after the multiplier', A3: 'after the multiplier', B3: 'weight', P3: 'number × weight', S0: 'slot', S1: 'slot', S2: 'slot', S3: 'slot' };
 function pick(e) {
   const tip = $('#tip');
@@ -1284,6 +1358,7 @@ function frame(real) {
   for (const g of Object.values(G)) if (g.step(now)) dirty = true;
   if (updatePulses(real)) dirty = true;
   if (play && !play.done && now >= play.t) { if (play.i + 1 < play.stages.length) { play.i++; runStage(now - play.t); } else play.done = true; }
+  if (autoplay && !paused && tr && play && play.done && !advance()) stopPlay();
   updateSeek();
   if (merge && merge.n < 576) {   // count the cubes that have arrived in the holder (same timing as Group.step's stagger)
     const u = (now - merge.t0) / MERGE_MS, n = Math.max(0, Math.min(576, Math.floor(((u - STAG_W) / (1 - STAG_W)) * 575) + 1));
@@ -1291,8 +1366,8 @@ function frame(real) {
   }
   if (glow) {                     // the counting pass: the band moves over the stream, the counter cube counts along
     const u = Math.min(1, (now - glow.t0) / glow.ms), n = Math.round(u * 576);
-    if (n !== glow.n) { glow.n = n; G.CH.vals[2] = n; G.R.write(); dirty = true; }
-    if (u >= 1) { glow = null; G.R.write(); }
+    if (n !== glow.n) { glow.n = n; G.CH.vals[1] = n; glow.g.write(); dirty = true; }
+    if (u >= 1) { const g = glow.g; glow = null; g.write(); }
   }
   const k = Math.min(1, (now - camT0) / camDur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
   if (k < 1) dirty = true;
@@ -1364,7 +1439,7 @@ function drawNumbers(H, panelH, topH, vf) {
   // The tracked position: a label above its cube in every linked group, readable at any zoom.
   // Value holders (the knob chain, the sum, its partner): the number on the cube's face, sized to the cube; a tag
   // only when the cube is too small on screen to hold it. Counts along during a merge.
-  const holders = [...Array.from({ length: 9 }, (_, i) => [G.CH, i]), [G.NS, 0], [G.NS, 1]];
+  const holders = [...Array.from({ length: 6 }, (_, i) => [G.CH, i]), [G.NS, 0], [G.NS, 1]];
   for (const [g, i] of holders) {
     const j = i * 3;
     if (g.cur.s[j] < 0.5) continue;
