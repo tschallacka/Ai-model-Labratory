@@ -1,8 +1,8 @@
 {
- "version": "1e97a0f7db18",
+ "version": "5c3462152097",
  "files": {
-  "artifact.html": "1e6ed4677deb",
-  "index.html": "8a5f3f1ea195",
+  "artifact.html": "eaee53d3d1b1",
+  "index.html": "72a6f8760325",
   "traces/chat.b64.txt": "4a4a66fa4df5",
   "traces/code.b64.txt": "4afe9cf5b21f",
   "traces/maths.b64.txt": "9e0db8d813fe",
