@@ -32,6 +32,11 @@ serves no binary file types.
 changes exactly when the content does. After a deploy, the live `version.json` matching the local one
 means the new build is being served.
 
+## Petri dishes
+
+`petri/mini.py` cuts the model down to what one input text needs for its own output, into a small folder
+with a numpy-only `run.py` and a change meter, to experiment on. See [petri/DISHES.md](petri/DISHES.md).
+
 ## Files
 
 - `petri/viewer.html`: the page (three.js), used by both the live server and the static build.
